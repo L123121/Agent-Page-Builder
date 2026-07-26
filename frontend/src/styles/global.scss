@@ -1,0 +1,203 @@
+:root {
+    --main-bg-color: #ffffff;
+    --secondary-bg-color: #f8f9fb;
+    --button-text-color: #303133;
+    --button-active-bg-color: #f0f7ff;
+    --button-active-text-color: #409eff;
+    --text-color: #303133;
+    --secondary-text-color: #909399;
+    --border-color: #e4e7ed;
+    --toolbar-border-color: #e4e7ed;
+    --placeholder-text-color: #c0c4cc;
+    --placeholder-bg-color: #ffffff;
+    --actived-text-color: #409eff;
+    --actived-bg-color: #f0f7ff;
+    --ace-bg-color: #f5f7fa;
+    --disable-text-color: #c0c4cc;
+    --disable-border-color: #ebeef5;
+    --dropdown-border-color: #e4e7ed;
+    --sidebar-width: 260px;
+    --toolbar-height: 48px;
+    --primary-color: #409eff;
+    --panel-bg: #ffffff;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: #dcdfe6;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background-color: transparent;
+}
+
+::-webkit-scrollbar-corner {
+    background-color: transparent;
+}
+
+.home {
+    overflow: hidden;
+
+    .attr-list {
+        overflow: auto;
+        padding: 20px;
+        height: 100%;
+
+        .el-form-item {
+            margin-bottom: 20px;
+        }
+
+        .el-form-item__label {
+            font-weight: 500;
+            padding-bottom: 8px;
+            line-height: 1.2;
+        }
+    }
+
+    .title {
+        font-weight: 600;
+        font-size: 14px;
+        margin-bottom: 16px;
+        color: var(--text-color);
+        display: flex;
+        align-items: center;
+        
+        &::before {
+            content: '';
+            width: 3px;
+            height: 14px;
+            background: var(--primary-color);
+            margin-right: 8px;
+            border-radius: 2px;
+        }
+    }
+
+    .el-collapse-item__content {
+        padding-bottom: 0;
+    }
+
+    .v-common-attr {
+        margin-bottom: 18px;
+
+        .el-form {
+            padding: 10px;
+            padding-top: 0;
+        }
+    }
+
+    .el-dialog {
+        background: var(--main-bg-color);
+
+        .el-dialog__title {
+            color: var(--text-color);
+        }
+    }
+}
+
+.el-tabs {
+    height: 100%;
+}
+
+.el-dropdown {
+    color: var(--text-color);
+}
+
+.el-tabs__content {
+    height: calc(100% - 55px);
+    overflow: auto;
+}
+
+.el-tabs__nav-scroll {
+    padding-left: 20px;
+}
+
+.el-tabs__header {
+    margin: 0;
+    background: var(--secondary-bg-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.el-tabs__nav-wrap::after {
+    display: none;
+}
+
+.el-tabs__active-bar {
+    height: 2px;
+    border-radius: 2px;
+}
+
+.el-tabs__item {
+    font-size: 13px;
+    height: 48px;
+    line-height: 48px;
+    transition: all 0.2s;
+    
+    &.is-active {
+        font-weight: 600;
+    }
+
+    .tab-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+
+        .el-icon {
+            font-size: 16px;
+        }
+    }
+}
+
+.el-tag {
+    text-align: right;
+}
+
+.el-checkbox__inner {
+    background-color: var(--placeholder-bg-color);
+}
+
+/* 移除过时的 dark-mode-switch 样式 */
+
+.el-color-picker__panel {
+    background-color: var(--main-bg-color);
+    border-color: var(--border-color);
+
+    .el-color-dropdown__btn,
+    .el-input__inner {
+        background: var(--secondary-bg-color);
+        border: 1px solid var(--secondary-bg-color);
+        color: var(--button-text-color);
+    }
+
+    .el-color-dropdown__btn:hover {
+        background: var(--button-active-text-color);
+        border-color: var(--actived-bg-color);
+        color: var(--main-bg-color);
+    }
+}
+
+.el-select-dropdown {
+    border-color: var(--dropdown-border-color);
+}
+
+.el-color-dropdown__btn {
+    background: var(--secondary-bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--button-text-color);
+
+    &:active {
+        background: var(--button-active-text-color);
+        border-color: var(--actived-bg-color);
+        color: var(--main-bg-color);
+    }
+
+    &:hover {
+        background: var(--button-active-text-color);
+        border-color: var(--actived-bg-color);
+        color: var(--main-bg-color);
+    }
+}

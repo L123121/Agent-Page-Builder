@@ -1,0 +1,641 @@
+<template>
+    <div class="ai-panel" :class="{ visible: modelValue }">
+        <div class="ai-panel-header">
+            <span class="ai-panel-title">AI 助手</span>
+            <div class="ai-panel-actions">
+                <el-button v-if="messages.length" text size="small" @click="clearChat">
+                    清空对话
+                </el-button>
+                <el-button text :icon="Close" @click="$emit('update:modelValue', false)" />
+            </div>
+        </div>
+
+        <div ref="chatBodyRef" class="ai-panel-body">
+            <!-- 空状态提示 -->
+            <div v-if="!messages.length" class="ai-empty">
+                <p class="ai-empty-title">描述你想要的页面，AI 帮你生成</p>
+                <p class="ai-empty-sub">一步步引导你完成设计，生成后可以自由修改</p>
+                <div class="ai-examples">
+                    <el-tag
+                        v-for="ex in examples"
+                        :key="ex"
+                        class="ai-example-tag"
+                        effect="plain"
+                        @click="sendMessage(ex)"
+                    >
+                        {{ ex }}
+                    </el-tag>
+                </div>
+            </div>
+
+            <!-- 对话消息 -->
+            <div v-for="(msg, i) in messages" :key="i" class="ai-msg" :class="msg.role">
+                <div class="ai-msg-bubble">
+                    <span v-if="msg.role === 'assistant' && msg.loading" class="ai-typing">
+                        <span /><span /><span />
+                        <span class="ai-typing-text">{{ loadingText }}</span>
+                    </span>
+                    <template v-else>{{ msg.content }}</template>
+                </div>
+                <!-- 快捷回复建议（ask_question 附带） -->
+                <div v-if="msg.suggestions?.length && !msg.optionSelected" class="ai-suggestions">
+                    <el-tag
+                        v-for="s in msg.suggestions"
+                        :key="s"
+                        class="ai-suggestion-tag"
+                        effect="plain"
+                        @click="sendMessage(s)"
+                    >
+                        {{ s }}
+                    </el-tag>
+                </div>
+                <!-- 选项卡片（propose_options） -->
+                <div v-if="msg.options?.length && !msg.optionSelected" class="ai-options">
+                    <div
+                        v-for="opt in msg.options"
+                        :key="opt.id"
+                        class="ai-option-card"
+                        :class="{ disabled: msg.optionSelected }"
+                        @click="selectOption(msg, opt)"
+                    >
+                        <div class="ai-option-header">
+                            <span class="ai-option-title">{{ opt.title }}</span>
+                            <el-tag v-if="opt.tag" size="small" type="warning" effect="plain">
+                                {{ opt.tag }}
+                            </el-tag>
+                        </div>
+                        <p class="ai-option-desc">{{ opt.description }}</p>
+                    </div>
+                </div>
+                <!-- 方案确认卡片（confirm_plan） -->
+                <div v-if="msg.plan" class="ai-plan" :class="{ disabled: msg.planResolved }">
+                    <p class="ai-plan-summary">{{ msg.plan.summary }}</p>
+                    <ul class="ai-plan-details">
+                        <li v-for="(d, j) in msg.plan.details" :key="j">{{ d }}</li>
+                    </ul>
+                    <div v-if="!msg.planResolved" class="ai-plan-actions">
+                        <el-button type="primary" size="small" @click="confirmPlan(msg)">
+                            确认生成
+                        </el-button>
+                        <el-button size="small" @click="rejectPlan(msg)">
+                            我要修改
+                        </el-button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ai-panel-footer">
+            <el-input
+                v-model="inputText"
+                type="textarea"
+                :rows="2"
+                :placeholder="hasComponents ? '继续说，比如「标题改大一点」' : '描述你想要的海报或报名表...'"
+                :disabled="loading"
+                @keydown.enter.prevent="handleSend"
+                @keydown.shift.enter="(e: any) => { /* Shift+Enter = 换行，默认行为 */ }"
+            />
+            <el-button
+                type="primary"
+                :loading="loading"
+                :disabled="!inputText.trim()"
+                class="ai-send-btn"
+                @click="handleSend"
+            >
+                发送
+            </el-button>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
+import { Close } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { chatWithAI, type ChatMessage, type AIAction, type AIOption, type AIPlan } from '@/api/ai'
+import { useStore } from '@/store'
+import {
+    importDataWithCommand,
+    addComponentWithCommand,
+    deleteComponentWithCommand,
+} from '@/composables/useCommandActions'
+import { deepCopy } from '@/utils/utils'
+import type { ComponentData } from '@/types'
+
+defineProps<{ modelValue: boolean }>()
+defineEmits<{ 'update:modelValue': [value: boolean] }>()
+
+const store = useStore()
+const inputText = ref('')
+const loading = ref(false)
+const loadingText = ref('AI 正在思考...')
+const chatBodyRef = ref<HTMLElement>()
+const AI_TIMEOUT = 90000 // 90 秒超时
+
+// 前端请求取消 token，用于超时真正中断 fetch
+let currentAbortController: AbortController | null = null
+
+interface DisplayMessage {
+    role: 'user' | 'assistant'
+    content: string
+    loading?: boolean
+    options?: AIOption[]
+    optionSelected?: string
+    suggestions?: string[]
+    plan?: AIPlan
+    planResolved?: boolean
+}
+const messages = ref<DisplayMessage[]>([])
+
+const hasComponents = computed(() => store.componentData.length > 0)
+
+const examples = [
+    '街舞社招新海报，时间9月15日，地点大活',
+    '志愿者报名表，含姓名学号学院意向部门',
+    '读书分享会宣传海报，文艺清新风格',
+    '社团纳新报名表，包含5个部门选择',
+]
+
+// ==================== 对话历史持久化 ====================
+const HISTORY_KEY = 'ai-chat-history'
+
+function saveHistory() {
+    try {
+        const data = messages.value.map(m => ({
+            role: m.role,
+            content: m.content,
+            options: m.options,
+            optionSelected: m.optionSelected,
+            suggestions: m.suggestions,
+            plan: m.plan,
+            planResolved: m.planResolved,
+        }))
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(data))
+    } catch { /* quota exceeded */ }
+}
+
+function loadHistory() {
+    try {
+        const raw = localStorage.getItem(HISTORY_KEY)
+        if (raw) {
+            const data = JSON.parse(raw) as DisplayMessage[]
+            messages.value = data
+        }
+    } catch { /* ignore */ }
+}
+
+onMounted(() => {
+    loadHistory()
+})
+
+// 自动滚动到底部 + 持久化
+watch(messages, async () => {
+    await nextTick()
+    if (chatBodyRef.value) {
+        chatBodyRef.value.scrollTop = chatBodyRef.value.scrollHeight
+    }
+    saveHistory()
+}, { deep: true })
+
+function clearChat() {
+    messages.value = []
+    localStorage.removeItem(HISTORY_KEY)
+}
+
+async function sendMessage(text?: string) {
+    const prompt = (text || inputText.value).trim()
+    if (!prompt || loading.value) return
+
+    // AI 生成前检查画布是否已有内容
+    const hasCanvasContent = store.componentData.length > 0
+    const isFirstGenerate = messages.value.some(m => m.planResolved)
+    if (hasCanvasContent && !isFirstGenerate && prompt.includes('确认') && prompt.includes('生成')) {
+        try {
+            await ElMessageBox.confirm('AI 将替换当前画布所有内容，是否继续？', '确认覆盖', {
+                confirmButtonText: '继续', cancelButtonText: '取消', type: 'warning',
+            })
+        } catch { return }
+    }
+
+    inputText.value = ''
+    messages.value.push({ role: 'user', content: prompt })
+    messages.value.push({ role: 'assistant', content: '', loading: true })
+    loading.value = true
+    loadingText.value = 'AI 正在思考...'
+
+    try {
+        // 构建对话历史（不含 loading 占位）
+        const history: ChatMessage[] = messages.value
+            .filter(m => !m.loading)
+            .slice(0, -1)
+            .map(m => ({ role: m.role, content: m.content }))
+
+        // 超时控制
+        currentAbortController = new AbortController()
+        const timeoutId = setTimeout(() => {
+            currentAbortController!.abort()
+            loadingText.value = '请求超时，请重试'
+        }, AI_TIMEOUT)
+
+        const res = await chatWithAI({
+            prompt,
+            history,
+            components: store.componentData,
+            canvasStyle: store.canvasStyleData,
+            canvasWidth: store.canvasStyleData.width,
+            canvasHeight: store.canvasStyleData.height,
+            signal: currentAbortController.signal,
+        })
+
+        clearTimeout(timeoutId)
+        currentAbortController = null
+
+        // 更新 AI 回复
+        const lastMsg = messages.value[messages.value.length - 1]
+        lastMsg.loading = false
+        lastMsg.content = res.reply || '已完成修改'
+
+        // 根据返回结果展示对应 UI
+        if (res.options?.length) {
+            lastMsg.options = res.options
+        } else if (res.plan) {
+            lastMsg.plan = res.plan
+        } else if (res.suggestions?.length) {
+            lastMsg.suggestions = res.suggestions
+        } else if (res.actions.length > 0) {
+            applyActions(res.actions)
+            ElMessage.success(res.reply || '已完成')
+        }
+    } catch (err: any) {
+        const lastMsg = messages.value[messages.value.length - 1]
+        lastMsg.loading = false
+        if (lastMsg.content === '') {
+            lastMsg.content = '出错了: ' + (err?.response?.data?.error || err.message || '未知错误')
+        }
+        ElMessage.error(lastMsg.content)
+    } finally {
+        loading.value = false
+    }
+}
+
+function handleSend() {
+    sendMessage()
+}
+
+/** 用户点击选项卡片 → 发送选择消息，LLM 自主决定下一步 */
+function selectOption(msg: DisplayMessage, opt: AIOption) {
+    if (msg.optionSelected || loading.value) return
+    msg.optionSelected = opt.id
+    sendMessage(`我选择「${opt.title}」`)
+}
+
+/** 用户确认方案 → 发送确认消息 */
+function confirmPlan(msg: DisplayMessage) {
+    if (msg.planResolved || loading.value) return
+    msg.planResolved = true
+    sendMessage('确认，请生成')
+}
+
+/** 用户要修改方案 → 发送修改意图 */
+function rejectPlan(msg: DisplayMessage) {
+    if (msg.planResolved || loading.value) return
+    msg.planResolved = true
+    sendMessage('我想修改一下方案')
+}
+
+// ==================== 组件查找与操作执行 ====================
+
+function findComponent(id: string): ComponentData | undefined {
+    const exact = store.componentData.find(c => c.id === id)
+    if (exact) return exact
+
+    const lower = id.toLowerCase()
+    return store.componentData.find(c => {
+        const pv = typeof c.propValue === 'string' ? c.propValue.toLowerCase() : ''
+        const label = (c.label || '').toLowerCase()
+        if (lower.includes('title') || lower.includes('标题')) {
+            return c.component === 'VText' && (c.style.fontSize ?? 0) >= 20
+        }
+        if (lower.includes('bg') || lower.includes('背景')) {
+            return c.component === 'RectShape' && (c.zIndex ?? 0) <= 5
+        }
+        if (lower.includes('btn') || lower.includes('button') || lower.includes('按钮')) {
+            return c.component === 'VButton'
+        }
+        if (lower.includes('table') || lower.includes('表')) {
+            return c.component === 'VTable'
+        }
+        if (pv && lower.includes(pv.slice(0, 6))) return true
+        if (label && lower.includes(label)) return true
+        return false
+    })
+}
+
+function applyActions(actions: AIAction[]) {
+    // 将 modify/move 批量处理为一次可撤销的整体替换（利用 ImportDataCommand）
+    const modifyMoveActions = actions.filter(a => a.type === 'modify' || a.type === 'move')
+    const otherActions = actions.filter(a => !['modify', 'move'].includes(a.type))
+
+    if (modifyMoveActions.length > 0) {
+        const allComponents = deepCopy(store.componentData)
+
+        for (const action of modifyMoveActions) {
+            const comp = allComponents.find(c => c.id === action.id)
+            if (!comp) continue
+            if (action.type === 'modify') {
+                if (action.style) Object.assign(comp.style, action.style)
+                if (action.propValue !== undefined) {
+                    comp.propValue = action.propValue as ComponentData['propValue']
+                }
+            } else if (action.type === 'move') {
+                if (action.top !== undefined) comp.style.top = action.top
+                if (action.left !== undefined) comp.style.left = action.left
+            }
+        }
+
+        importDataWithCommand(allComponents)
+    }
+
+    for (const action of otherActions) {
+        switch (action.type) {
+            case 'generate':
+                if (action.components?.length) {
+                    importDataWithCommand(action.components as ComponentData[], action.canvasStyle)
+                }
+                break
+            case 'add':
+                if (action.component) {
+                    addComponentWithCommand(action.component as ComponentData)
+                }
+                break
+            case 'delete': {
+                const comp = action.id ? findComponent(action.id) : undefined
+                if (comp) deleteComponentWithCommand(comp.id)
+                break
+            }
+        }
+    }
+}
+</script>
+
+<style scoped lang="scss">
+.ai-panel {
+    position: fixed;
+    top: 60px;
+    right: -400px;
+    width: 400px;
+    height: calc(100vh - 60px);
+    background: #fff;
+    border-left: 1px solid #e4e7ed;
+    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    z-index: 2000;
+    transition: right 0.3s ease;
+
+    &.visible {
+        right: 0;
+    }
+}
+
+.ai-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #ebeef5;
+}
+
+.ai-panel-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #303133;
+}
+
+.ai-panel-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ai-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.ai-empty {
+    text-align: center;
+    padding: 40px 16px;
+}
+
+.ai-empty-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #303133;
+    margin: 0 0 8px;
+}
+
+.ai-empty-sub {
+    font-size: 13px;
+    color: #909399;
+    margin: 0 0 20px;
+}
+
+.ai-examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+
+.ai-example-tag {
+    cursor: pointer;
+    font-size: 12px;
+
+    &:hover {
+        color: #409eff;
+        border-color: #409eff;
+    }
+}
+
+.ai-msg {
+    margin-bottom: 12px;
+    display: flex;
+
+    &.user {
+        justify-content: flex-end;
+
+        .ai-msg-bubble {
+            background: #409eff;
+            color: #fff;
+            border-radius: 12px 12px 2px 12px;
+        }
+    }
+
+    &.assistant {
+        flex-direction: column;
+        align-items: flex-start;
+
+        .ai-msg-bubble {
+            background: #f4f4f5;
+            color: #303133;
+            border-radius: 12px 12px 12px 2px;
+        }
+    }
+}
+
+.ai-msg-bubble {
+    max-width: 85%;
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.6;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.ai-typing {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+
+    span {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #909399;
+        animation: typing 1.2s infinite;
+
+        &:nth-child(2) { animation-delay: 0.2s; }
+        &:nth-child(3) { animation-delay: 0.4s; }
+    }
+
+    .ai-typing-text {
+        all: unset;
+        font-size: 12px;
+        color: #909399;
+        margin-left: 4px;
+        animation: none;
+        width: auto;
+        height: auto;
+        border-radius: 0;
+        background: none;
+    }
+}
+
+@keyframes typing {
+    0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-4px); }
+}
+
+.ai-panel-footer {
+    padding: 12px 16px;
+    border-top: 1px solid #ebeef5;
+}
+
+.ai-send-btn {
+    width: 100%;
+    margin-top: 8px;
+}
+
+.ai-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.ai-suggestion-tag {
+    cursor: pointer;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 16px;
+
+    &:hover {
+        color: #409eff;
+        border-color: #409eff;
+        background: #ecf5ff;
+    }
+}
+
+.ai-options {
+    width: 100%;
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ai-option-card {
+    border: 1px solid #e4e7ed;
+    border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #fff;
+
+    &:hover {
+        border-color: #409eff;
+        box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
+    }
+
+    &.disabled {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+}
+
+.ai-option-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.ai-option-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #303133;
+}
+
+.ai-option-desc {
+    font-size: 12px;
+    color: #909399;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.ai-plan {
+    width: 100%;
+    margin-top: 8px;
+    border: 1px solid #e4e7ed;
+    border-radius: 10px;
+    padding: 14px;
+    background: #fafafa;
+
+    &.disabled {
+        opacity: 0.6;
+    }
+}
+
+.ai-plan-summary {
+    font-size: 14px;
+    font-weight: 600;
+    color: #303133;
+    margin: 0 0 10px;
+}
+
+.ai-plan-details {
+    margin: 0 0 12px;
+    padding-left: 18px;
+    font-size: 12px;
+    color: #606266;
+    line-height: 1.8;
+}
+
+.ai-plan-actions {
+    display: flex;
+    gap: 8px;
+}
+</style>

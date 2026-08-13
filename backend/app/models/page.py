@@ -2,8 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, JSON, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, Column, DateTime, JSON, String, Text
 
 from app.database import Base
 from app.utils.id_generator import generate_id
@@ -15,15 +14,13 @@ class Page(Base):
     id = Column(String, primary_key=True, default=generate_id)
     title = Column(String(100), default="未命名页面", nullable=False)
     description = Column(Text, default="")
-    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(String, nullable=False, default="anonymous", index=True)
     component_data = Column(JSON, default=list)
     canvas_style = Column(JSON, default=dict)
     share_token = Column(String, nullable=True, index=True)
     is_public = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    user = relationship("User", back_populates="pages")
 
     # 默认画布样式
     DEFAULT_CANVAS_STYLE = {

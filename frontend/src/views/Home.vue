@@ -119,7 +119,7 @@ import CanvasAttr from '@/components/CanvasAttr.vue'
 import PropPanelRenderer from '@/custom-component/PropPanelRenderer.vue'
 import { ArrowLeft, ArrowRight, Box, Operation, CollectionTag, Film, Pointer, Clock } from '@element-plus/icons-vue'
 import { useAutoSave } from '@/composables/useAutoSave'
-import { useCommandHistory } from '@/composables/useCommandHistory'
+import { useCommandHistory, restoreCommandHistory } from '@/composables/useCommandHistory'
 import { useDragDrop } from '@/composables/useDragDrop'
 import { usePanelToggle } from '@/composables/usePanelToggle'
 import { validateComponentData, validateCanvasStyle } from '@/utils/validation'
@@ -171,6 +171,8 @@ function restore(): void {
 
 onMounted(() => {
     restore()
+    // 恢复跨会话的命令历史（刷新后仍可 Ctrl+Z）
+    restoreCommandHistory().catch(() => {})
     const cleanup = listenGlobalKeyDown()
     onUnmounted(() => { cleanup() })
 

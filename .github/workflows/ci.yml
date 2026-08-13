@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend tests + Agent eval
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: python -m unittest tests.test_ai_agent
+
+      - name: Run agent eval (mock mode, 100% gate)
+        # mock 模式使用脚本化 LLM，无需 API key，确定性回归 Agent 逻辑；
+        # --require-pass-rate 100 使通过率不达标时退出码非 0，CI 判定失败
+        run: python -m eval.runner --mode mock --require-pass-rate 100

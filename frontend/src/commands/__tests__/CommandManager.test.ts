@@ -59,6 +59,7 @@ function createTestContext(store: ReturnType<typeof useStore>): CommandContext {
                 store.componentData.push(item)
             }
             store.markDataDirty()
+            store.indexAddComponent(item)
         },
 
         remove(id: string) {
@@ -70,6 +71,7 @@ function createTestContext(store: ReturnType<typeof useStore>): CommandContext {
         removeAt(index: number) {
             if (index < 0 || index >= store.componentData.length) return null
             const removed = store.componentData.splice(index, 1)[0] ?? null
+            if (removed) store.indexRemoveComponent(removed)
             store.markDataDirty()
             return removed
         },
@@ -86,6 +88,7 @@ function createTestContext(store: ReturnType<typeof useStore>): CommandContext {
             const backup = store.componentData.slice()
             store.componentData.splice(0, store.componentData.length, ...list)
             store.markDataDirty()
+            store.rebuildChildrenIndex()
             return backup
         },
 

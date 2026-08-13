@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import Base, engine, get_db
 from app.models.page import Page
-from app.routers import auth, pages, ai
+from app.routers import pages, ai
 
 
 @asynccontextmanager
@@ -36,7 +36,6 @@ app.add_middleware(
 )
 
 # 挂载路由
-app.include_router(auth.router, prefix="/api/auth")
 app.include_router(pages.router, prefix="/api/pages")
 app.include_router(ai.router, prefix="/api/ai")
 

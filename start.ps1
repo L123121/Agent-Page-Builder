@@ -28,7 +28,7 @@ Start-Sleep -Seconds 2
 Write-Host "`n============================================" -ForegroundColor Green
 Write-Host "   启动完成！" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
-Write-Host "`n前端编辑器: http://localhost:5173" -ForegroundColor Cyan
+Write-Host "`n前端编辑器: http://localhost:8080" -ForegroundColor Cyan
 Write-Host "后端 API:    http://localhost:8000" -ForegroundColor Cyan
 Write-Host "API 文档:    http://localhost:8000/docs" -ForegroundColor Cyan
 Write-Host "`n后端日志: $backendLog" -ForegroundColor Gray

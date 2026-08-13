@@ -85,6 +85,9 @@ const width = ref(0)
 const height = ref(0)
 const isShowArea = ref(false)
 
+// editorContext hideArea 回调的取消注册函数（onUnmounted 时清理）
+let unregisterHideArea: (() => void) | undefined
+
 // 视口裁剪：只渲染根级组件（无 parentId），子组件由 NodeRenderer 递归渲染
 const visibleComponents = computed(() => {
     // 筛选出根级组件（parentId 为空）
@@ -120,11 +123,12 @@ onMounted(() => {
     store.getEditor()
 
     // 注册 hideArea 回调（editorContext 用于内部触发，eventBus 用于 store 触发）
-    editorContext.onHideArea(hideArea)
+    unregisterHideArea = editorContext.onHideArea(hideArea)
     eventBus.on('hideArea', hideArea)
 })
 
 onUnmounted(() => {
+    unregisterHideArea?.()
     eventBus.off('hideArea', hideArea)
 })
 

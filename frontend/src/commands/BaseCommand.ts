@@ -12,6 +12,8 @@ export abstract class BaseCommand implements Command {
     timestamp: number = Date.now()
     mergeable: boolean = false
     data: Record<string, unknown> = {}
+    /** 内存权重：默认 1（增量命令）；全量快照命令应覆盖为更大的值 */
+    memoryWeight: number = 1
 
     abstract execute(): void
     abstract undo(): void

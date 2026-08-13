@@ -1,0 +1,509 @@
+{
+  "mode": "live",
+  "taskCount": 1,
+  "passedCount": 1,
+  "passRate": 100,
+  "avgScore": 100,
+  "results": [
+    {
+      "taskId": "poster_dance_recruit",
+      "taskName": "街舞社招新海报",
+      "pass": true,
+      "score": 100,
+      "failures": [],
+      "passedChecks": [
+        {
+          "code": "MIN_COMPONENTS",
+          "message": "组件数 11 >= 3"
+        },
+        {
+          "code": "REQUIRE_COMPONENT_VText",
+          "message": "存在组件类型 VText"
+        },
+        {
+          "code": "REQUIRE_COMPONENT_VButton",
+          "message": "存在组件类型 VButton"
+        },
+        {
+          "code": "REQUIRE_TEXT_街舞",
+          "message": "文本内容包含「街舞」"
+        },
+        {
+          "code": "REQUIRE_TEXT_招新",
+          "message": "文本内容包含「招新」"
+        },
+        {
+          "code": "VALIDATOR_PASS",
+          "message": "画布通过验证器（errors=0, warnings=4）"
+        },
+        {
+          "code": "MAX_STEPS",
+          "message": "工具步数 0 <= 14"
+        },
+        {
+          "code": "PLAN_WRITTEN",
+          "message": "planner 产出了设计方案并写入 state"
+        },
+        {
+          "code": "STAGE_REACHED",
+          "message": "最终阶段 edit == edit"
+        }
+      ],
+      "finalCanvas": [
+        {
+          "id": "bg001001",
+          "component": "RectShape",
+          "label": "背景",
+          "icon": "",
+          "propValue": "&nbsp;",
+          "style": {
+            "width": 375,
+            "height": 667,
+            "top": 0,
+            "left": 0,
+            "rotate": 0,
+            "opacity": 1,
+            "fontSize": 14,
+            "fontWeight": 400,
+            "lineHeight": "",
+            "letterSpacing": 0,
+            "textAlign": "center",
+            "color": "#000000",
+            "backgroundColor": "#0d0d0d",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 1,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        },
+        {
+          "id": "goldbar001",
+          "component": "RectShape",
+          "label": "金色装饰条",
+          "icon": "",
+          "propValue": "&nbsp;",
+          "style": {
+            "width": 375,
+            "height": 6,
+            "top": 0,
+            "left": 0,
+            "rotate": 0,
+            "opacity": 1,
+            "fontSize": 14,
+            "fontWeight": 400,
+            "lineHeight": "",
+            "letterSpacing": 0,
+            "textAlign": "center",
+            "color": "#000000",
+            "backgroundColor": "#d4af37",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 2,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        },
+        {
+          "id": "decor001",
+          "component": "VText",
+          "label": "英文装饰",
+          "icon": "",
+          "propValue": "STREET\nDANCE",
+          "style": {
+            "width": 375,
+            "height": 80,
+            "top": 40,
+            "left": 0,
+            "rotate": 0,
+            "opacity": 0.08,
+            "fontSize": 48,
+            "fontWeight": 900,
+            "lineHeight": "1.1",
+            "letterSpacing": 8,
+            "textAlign": "center",
+            "color": "#d4af37",
+            "backgroundColor": "transparent",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 3,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        },
+        {
+          "id": "title001",
+          "component": "VText",
+          "label": "主标题",
+          "icon": "",
+          "propValue": "街舞社\n招新",
+          "style": {
+            "width": 375,
+            "height": 120,
+            "top": 547,
+            "left": 0,
+            "rotate": 0,
+            "opacity": 1,
+            "fontSize": 42,
+            "fontWeight": 900,
+            "lineHeight": "1.2",
+            "letterSpacing": 4,
+            "textAlign": "center",
+            "color": "#d4af37",
+            "backgroundColor": "transparent",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 20,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        },
+        {
+          "id": "subtitle001",
+          "component": "VText",
+          "label": "副标题",
+          "icon": "",
+          "propValue": "JOIN US · 释放你的热爱",
+          "style": {
+            "width": 375,
+            "height": 30,
+            "top": 230,
+            "left": 0,
+            "rotate": 0,
+            "opacity": 0.8,
+            "fontSize": 14,
+            "fontWeight": 400,
+            "lineHeight": "1.5",
+            "letterSpacing": 2,
+            "textAlign": "center",
+            "color": "#ffffff",
+            "backgroundColor": "transparent",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 10,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        },
+        {
+          "id": "infocard001",
+          "component": "RectShape",
+          "label": "信息卡片",
+          "icon": "",
+          "propValue": "&nbsp;",
+          "style": {
+            "width": 300,
+            "height": 160,
+            "top": 290,
+            "left": 38,
+            "rotate": 0,
+            "opacity": 1,
+            "fontSize": 14,
+            "fontWeight": 400,
+            "lineHeight": "",
+            "letterSpacing": 0,
+            "textAlign": "center",
+            "color": "#000000",
+            "backgroundColor": "rgba(212,175,55,0.1)",
+            "borderColor": "#d4af37",
+            "borderWidth": 1,
+            "borderStyle": "solid",
+            "borderRadius": 8,
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 10,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        },
+        {
+          "id": "time001",
+          "component": "VText",
+          "label": "时间",
+          "icon": "",
+          "propValue": "⏰ 招新时间\n9月15日 - 9月20日",
+          "style": {
+            "width": 260,
+            "height": 50,
+            "top": 310,
+            "left": 58,
+            "rotate": 0,
+            "opacity": 1,
+            "fontSize": 15,
+            "fontWeight": 600,
+            "lineHeight": "1.5",
+            "letterSpacing": 1,
+            "textAlign": "left",
+            "color": "#d4af37",
+            "backgroundColor": "transparent",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 11,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        },
+        {
+          "id": "location001",
+          "component": "VText",
+          "label": "地点",
+          "icon": "",
+          "propValue": "📍 招新地点\n学生活动中心 301",
+          "style": {
+            "width": 260,
+            "height": 50,
+            "top": 370,
+            "left": 58,
+            "rotate": 0,
+            "opacity": 1,
+            "fontSize": 15,
+            "fontWeight": 600,
+            "lineHeight": "1.5",
+            "letterSpacing": 1,
+            "textAlign": "left",
+            "color": "#d4af37",
+            "backgroundColor": "transparent",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 11,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        },
+        {
+          "id": "contact001",
+          "component": "VText",
+          "label": "联系方式",
+          "icon": "",
+          "propValue": "📱 咨询微信\nDanceClub_2024",
+          "style": {
+            "width": 260,
+            "height": 50,
+            "top": 430,
+            "left": 58,
+            "rotate": 0,
+            "opacity": 1,
+            "fontSize": 15,
+            "fontWeight": 600,
+            "lineHeight": "1.5",
+            "letterSpacing": 1,
+            "textAlign": "left",
+            "color": "#d4af37",
+            "backgroundColor": "transparent",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 11,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        },
+        {
+          "id": "btn001",
+          "component": "VButton",
+          "label": "报名按钮",
+          "icon": "",
+          "propValue": "立即报名",
+          "style": {
+            "width": 200,
+            "height": 50,
+            "top": 520,
+            "left": 88,
+            "rotate": 0,
+            "opacity": 1,
+            "fontSize": 18,
+            "fontWeight": 700,
+            "lineHeight": "1.5",
+            "letterSpacing": 2,
+            "textAlign": "center",
+            "color": "#0d0d0d",
+            "backgroundColor": "#d4af37",
+            "borderColor": "#d4af37",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": 25,
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 20,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        },
+        {
+          "id": "footer001",
+          "component": "VText",
+          "label": "底部文字",
+          "icon": "",
+          "propValue": "期待你的加入",
+          "style": {
+            "width": 375,
+            "height": 30,
+            "top": 600,
+            "left": 0,
+            "rotate": 0,
+            "opacity": 0.6,
+            "fontSize": 12,
+            "fontWeight": 400,
+            "lineHeight": "1.5",
+            "letterSpacing": 1,
+            "textAlign": "center",
+            "color": "#ffffff",
+            "backgroundColor": "transparent",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 10,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        }
+      ],
+      "canvasStyle": {
+        "width": 375,
+        "height": 667,
+        "scale": 100,
+        "color": "#000000",
+        "opacity": 100,
+        "backgroundColor": "#0d0d0d",
+        "fontSize": 14
+      },
+      "steps": [],
+      "trace": [],
+      "plan": {
+        "summary": "街舞社招新海报 - 黑金酷炫街头风",
+        "details": [
+          "画布尺寸 375x667px，纯黑背景搭配金色几何线条装饰，营造街头潮流氛围",
+          "顶部大标题「街舞社招新」使用 32px 金色粗体，居中醒目展示",
+          "中部展示招新时间与地点信息，使用 16px 白色/金色文字，清晰易读",
+          "底部放置金色「立即报名」按钮，带圆角设计，引导用户点击"
+        ]
+      },
+      "nextStage": "edit",
+      "durationMs": 78375,
+      "tokenUsage": null,
+      "provider": "live"
+    }
+  ]
+}

@@ -18,6 +18,8 @@ export class ImportDataCommand extends BaseCommand {
     type = CommandType.IMPORT_DATA
     description = '导入数据'
     mergeable = false
+    /** 全量快照命令：按组件数加权内存占用 */
+    memoryWeight = 1
 
     private importData: ImportData
 
@@ -30,6 +32,8 @@ export class ImportDataCommand extends BaseCommand {
             backupComponentData: [],
             backupCanvasStyle: null,
         }
+        // 按新数据组件数加权（每 10 个组件 = 1 单位权重，最少 1）
+        this.memoryWeight = Math.max(1, Math.ceil(newComponentData.length / 10))
         this.data = this.importData as unknown as Record<string, unknown>
     }
 

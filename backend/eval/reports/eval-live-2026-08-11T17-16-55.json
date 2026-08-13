@@ -1,0 +1,72 @@
+{
+  "mode": "live",
+  "taskCount": 1,
+  "passedCount": 0,
+  "passRate": 0,
+  "avgScore": 22,
+  "results": [
+    {
+      "taskId": "poster_dance_recruit",
+      "taskName": "街舞社招新海报",
+      "pass": false,
+      "score": 22,
+      "failures": [
+        {
+          "code": "MIN_COMPONENTS",
+          "message": "组件数 0 >= 3"
+        },
+        {
+          "code": "REQUIRE_COMPONENT_VText",
+          "message": "存在组件类型 VText"
+        },
+        {
+          "code": "REQUIRE_COMPONENT_VButton",
+          "message": "存在组件类型 VButton"
+        },
+        {
+          "code": "REQUIRE_TEXT_街舞",
+          "message": "文本内容包含「街舞」"
+        },
+        {
+          "code": "REQUIRE_TEXT_招新",
+          "message": "文本内容包含「招新」"
+        },
+        {
+          "code": "PLAN_WRITTEN",
+          "message": "planner 产出了设计方案并写入 state"
+        },
+        {
+          "code": "STAGE_REACHED",
+          "message": "最终阶段 None == edit"
+        }
+      ],
+      "passedChecks": [
+        {
+          "code": "VALIDATOR_PASS",
+          "message": "画布通过验证器（errors=0, warnings=0）"
+        },
+        {
+          "code": "MAX_STEPS",
+          "message": "工具步数 0 <= 14"
+        }
+      ],
+      "finalCanvas": [],
+      "canvasStyle": {
+        "width": 375,
+        "height": 667,
+        "scale": 100,
+        "color": "#000000",
+        "opacity": 100,
+        "backgroundColor": "#ffffff",
+        "fontSize": 14
+      },
+      "steps": [],
+      "trace": [],
+      "plan": null,
+      "nextStage": null,
+      "durationMs": 83030,
+      "tokenUsage": null,
+      "provider": "live"
+    }
+  ]
+}

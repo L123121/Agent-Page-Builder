@@ -26,16 +26,24 @@ export class BatchOperation {
 
 /**
  * 命令管理器 - 双栈撤销重做
+ *
+ * 内存管理：维护 undoStack 的 memoryWeight 总预算。
+ * 全量快照命令（导入/清空画布）按组件数加权（memoryWeight = ceil(组件数/10)），
+ * 普通增量命令 memoryWeight = 1。超出预算时从栈底淘汰最早命令，
+ * 防止大画布长时间编辑导致 OOM。
  */
 export class CommandManager {
     private undoStack: Command[] = []
     private redoStack: Command[] = []
     private readonly config: CommandManagerConfig
+    /** 当前 undoStack 的内存权重总和 */
+    private currentMemoryWeight = 0
 
     constructor(config: Partial<CommandManagerConfig> = {}) {
         this.config = {
             maxStackSize: config.maxStackSize ?? 50,
             mergeTimeWindow: config.mergeTimeWindow ?? 300,
+            maxMemoryWeight: config.maxMemoryWeight ?? 50,
         }
     }
 
@@ -47,18 +55,40 @@ export class CommandManager {
 
         if (this.shouldMerge(lastCommand, command)) {
             const mergedCommand = lastCommand!.merge(command)
+            // 合并时更新权重：减去旧命令权重，加上合并后权重
+            this.currentMemoryWeight -= lastCommand!.memoryWeight
             this.undoStack[this.undoStack.length - 1] = mergedCommand
             mergedCommand.execute()
+            this.currentMemoryWeight += mergedCommand.memoryWeight
             this.redoStack = []
+            this.enforceMemoryBudget()
             return
         }
 
         command.execute()
         this.undoStack.push(command)
+        this.currentMemoryWeight += command.memoryWeight
         this.redoStack = []
 
         if (this.undoStack.length > this.config.maxStackSize) {
-            this.undoStack.shift()
+            const removed = this.undoStack.shift()
+            if (removed) this.currentMemoryWeight -= removed.memoryWeight
+        }
+
+        this.enforceMemoryBudget()
+    }
+
+    /**
+     * 强制执行内存预算：从栈底淘汰最早命令，直到总权重 <= 预算上限。
+     * 被淘汰的命令将不可撤销，但保证内存有界。
+     */
+    private enforceMemoryBudget(): void {
+        const max = this.config.maxMemoryWeight
+        let guard = 0
+        while (this.currentMemoryWeight > max && this.undoStack.length > 1 && guard < 1000) {
+            const removed = this.undoStack.shift()
+            if (removed) this.currentMemoryWeight -= removed.memoryWeight
+            guard++
         }
     }
 
@@ -81,6 +111,7 @@ export class CommandManager {
 
         command.undo()
         this.redoStack.push(command)
+        this.currentMemoryWeight -= command.memoryWeight
         return true
     }
 
@@ -90,6 +121,7 @@ export class CommandManager {
 
         command.redo()
         this.undoStack.push(command)
+        this.currentMemoryWeight += command.memoryWeight
         return true
     }
 
@@ -112,6 +144,7 @@ export class CommandManager {
     clear(): void {
         this.undoStack = []
         this.redoStack = []
+        this.currentMemoryWeight = 0
     }
 
     beginBatch(description: string = '批量操作'): BatchOperation {
@@ -135,6 +168,8 @@ export class CommandManager {
     importStack(envelopes: CommandEnvelope[]): void {
         this.undoStack = deserializeStack(envelopes)
         this.redoStack = []
+        // 重新计算内存权重
+        this.currentMemoryWeight = this.undoStack.reduce((sum, cmd) => sum + cmd.memoryWeight, 0)
     }
 
     /**

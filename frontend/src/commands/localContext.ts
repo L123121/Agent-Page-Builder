@@ -42,6 +42,7 @@ export function createCommandContext(): CommandContext {
             store.componentData.splice(insertIndex, 0, item)
             normalizeComponentZIndex(store.componentData)
             store.markDataDirty()
+            store.indexAddComponent(item)
         },
 
         remove(id) {
@@ -53,6 +54,9 @@ export function createCommandContext(): CommandContext {
         removeAt(index) {
             if (index < 0 || index >= store.componentData.length) return null
             const removed = store.componentData.splice(index, 1)[0]
+            if (removed) {
+                store.indexRemoveComponent(removed)
+            }
             normalizeComponentZIndex(store.componentData)
             store.markDataDirty()
             return removed
@@ -71,6 +75,7 @@ export function createCommandContext(): CommandContext {
             store.componentData.splice(0, store.componentData.length, ...list)
             normalizeComponentZIndex(store.componentData)
             store.markDataDirty()
+            store.rebuildChildrenIndex()
             return backup
         },
 

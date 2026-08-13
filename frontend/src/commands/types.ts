@@ -22,6 +22,12 @@ export interface Command {
   mergeable: boolean
   /** 命令执行数据（仅保存增量变更） */
   data: Record<string, unknown>
+  /**
+   * 内存权重：表示该命令占用的相对内存单位。
+   * 普通增量命令 = 1；全量快照命令按组件数加权（Math.ceil(组件数 / 10)）。
+   * CommandManager 用此值在超预算时从栈底淘汰命令，防止长时间编辑 OOM。
+   */
+  memoryWeight: number
   /** 是否可在给定时间窗口内与另一个命令合并 */
   canMergeWith(other: Command, mergeTimeWindow: number): boolean
   /** 与另一个命令合并 */
@@ -158,4 +164,6 @@ export interface PositionData {
 export interface CommandManagerConfig {
   maxStackSize: number
   mergeTimeWindow: number
+  /** 内存权重预算上限，超出时从栈底淘汰最早命令。默认 50。 */
+  maxMemoryWeight: number
 }

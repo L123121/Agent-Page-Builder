@@ -141,6 +141,8 @@ export interface StoreState {
   editMode: 'edit' | 'preview'
   canvasStyleData: CanvasStyleData
   componentData: ComponentData[]
+  /** parentId → 子组件数组 的索引，O(1) 查询子组件（替代 O(n) filter） */
+  childrenIndex: Map<string, ComponentData[]>
   curComponent: ComponentData | null
   curComponentIndex: number | null
   isClickComponent: boolean
@@ -156,6 +158,15 @@ export interface StoreState {
   versions: PageVersion[]
   /** 数据版本号，每次 componentData 变更时递增，用于自动保存的脏标记 */
   dataVersion: number
+  // ==================== 后端持久化 ====================
+  /** 当前编辑的页面 ID（null = 未保存到后端的新页面） */
+  currentPageId: string | null
+  /** 当前页面标题（用于显示和保存） */
+  currentPageTitle: string
+  /** 是否正在保存到后端 */
+  isSaving: boolean
+  /** 最后与后端同步的版本号（用于判断是否需要同步） */
+  lastSyncedVersion: number
 }
 
 // ==================== Store Actions Payloads ====================

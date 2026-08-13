@@ -93,7 +93,7 @@
                 :placeholder="hasComponents ? '继续说，比如「标题改大一点」' : '描述你想要的海报或报名表...'"
                 :disabled="loading"
                 @keydown.enter.prevent="handleSend"
-                @keydown.shift.enter="(e: any) => { /* Shift+Enter = 换行，默认行为 */ }"
+                @keydown.shift.enter="(e: KeyboardEvent) => { /* Shift+Enter = 换行，默认行为 */ }"
             />
             <el-button
                 type="primary"
@@ -112,7 +112,7 @@
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { Close } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { chatWithAI, type ChatMessage, type AIAction, type AIOption, type AIPlan } from '@/api/ai'
+import { chatWithAI, type ChatMessage, type AIAction, type AIOption, type AIPlan, type AgentStage } from '@/api/ai'
 import { useStore } from '@/store'
 import {
     importDataWithCommand,
@@ -146,8 +146,14 @@ interface DisplayMessage {
     planResolved?: boolean
 }
 const messages = ref<DisplayMessage[]>([])
+const conversationStage = ref<AgentStage>('discover')
 
 const hasComponents = computed(() => store.componentData.length > 0)
+const selectedComponentIds = computed(() => {
+    const areaIds = store.areaData.components.map(component => component.id)
+    if (areaIds.length > 0) return areaIds
+    return store.curComponent ? [store.curComponent.id] : []
+})
 
 const examples = [
     '街舞社招新海报，时间9月15日，地点大活',
@@ -158,6 +164,15 @@ const examples = [
 
 // ==================== 对话历史持久化 ====================
 const HISTORY_KEY = 'ai-chat-history'
+const HISTORY_STAGE_KEY = 'ai-chat-stage'
+const HISTORY_VERSION_KEY = 'ai-chat-version'
+const HISTORY_THREAD_KEY = 'ai-chat-thread-id'
+const HISTORY_VERSION = '4'
+
+/** 服务端会话标识：同一 threadId 下的执行状态由 checkpoint 持久化，可中断恢复 */
+const aiThreadId = ref<string | null>(localStorage.getItem(HISTORY_THREAD_KEY))
+/** 上一次响应 waitingForInput=true 时置位，下次请求需带 resume 恢复图执行 */
+const waitingForInput = ref(false)
 
 function saveHistory() {
     try {
@@ -171,15 +186,33 @@ function saveHistory() {
             planResolved: m.planResolved,
         }))
         localStorage.setItem(HISTORY_KEY, JSON.stringify(data))
+        localStorage.setItem(HISTORY_STAGE_KEY, conversationStage.value)
+        localStorage.setItem(HISTORY_VERSION_KEY, HISTORY_VERSION)
     } catch { /* quota exceeded */ }
 }
 
 function loadHistory() {
     try {
+        if (localStorage.getItem(HISTORY_VERSION_KEY) !== HISTORY_VERSION) {
+            localStorage.removeItem(HISTORY_KEY)
+            localStorage.removeItem(HISTORY_STAGE_KEY)
+            localStorage.removeItem(HISTORY_THREAD_KEY)
+            localStorage.setItem(HISTORY_VERSION_KEY, HISTORY_VERSION)
+            return
+        }
         const raw = localStorage.getItem(HISTORY_KEY)
         if (raw) {
             const data = JSON.parse(raw) as DisplayMessage[]
             messages.value = data
+        }
+        const savedStage = localStorage.getItem(HISTORY_STAGE_KEY) as AgentStage | null
+        if (savedStage && ['discover', 'design', 'plan', 'confirm', 'execute', 'edit'].includes(savedStage)) {
+            conversationStage.value = savedStage
+        }
+        // 恢复会话时同时恢复服务端 threadId（checkpoint 持久化）
+        const savedThread = localStorage.getItem(HISTORY_THREAD_KEY)
+        if (savedThread) {
+            aiThreadId.value = savedThread
         }
     } catch { /* ignore */ }
 }
@@ -199,7 +232,13 @@ watch(messages, async () => {
 
 function clearChat() {
     messages.value = []
+    conversationStage.value = 'discover'
+    aiThreadId.value = null
+    waitingForInput.value = false
     localStorage.removeItem(HISTORY_KEY)
+    localStorage.removeItem(HISTORY_STAGE_KEY)
+    localStorage.removeItem(HISTORY_THREAD_KEY)
+    localStorage.setItem(HISTORY_VERSION_KEY, HISTORY_VERSION)
 }
 
 async function sendMessage(text?: string) {
@@ -244,6 +283,17 @@ async function sendMessage(text?: string) {
             canvasStyle: store.canvasStyleData,
             canvasWidth: store.canvasStyleData.width,
             canvasHeight: store.canvasStyleData.height,
+            selectedComponentIds: selectedComponentIds.value,
+            viewport: {
+                width: store.editor?.clientWidth || store.canvasStyleData.width,
+                height: store.editor?.clientHeight || store.canvasStyleData.height,
+                scale: store.canvasStyleData.scale,
+            },
+            projectKnowledge: `页面名称：${store.currentPageTitle}。优先复用当前组件结构，遵守现有画布尺寸和视觉风格。`,
+            conversationStage: conversationStage.value,
+            // 中断恢复：上次响应 waitingForInput=true 时，把用户本轮输入作为 resume 传回
+            threadId: aiThreadId.value || undefined,
+            resume: waitingForInput.value ? prompt : undefined,
             signal: currentAbortController.signal,
         })
 
@@ -254,6 +304,20 @@ async function sendMessage(text?: string) {
         const lastMsg = messages.value[messages.value.length - 1]
         lastMsg.loading = false
         lastMsg.content = res.reply || '已完成修改'
+        if (res.nextStage) {
+            conversationStage.value = res.nextStage
+        }
+        if (res.validation) {
+            lastMsg.content += `\n验证结果：${res.validation.summary}`
+        }
+
+        // 服务端 checkpoint 会话标识：首次返回后保存，后续恢复执行使用
+        if (res.threadId) {
+            aiThreadId.value = res.threadId
+            localStorage.setItem(HISTORY_THREAD_KEY, res.threadId)
+        }
+        // 图挂起等待用户输入：置位后下次请求自动携带 resume
+        waitingForInput.value = !!res.waitingForInput
 
         // 根据返回结果展示对应 UI
         if (res.options?.length) {
@@ -266,11 +330,12 @@ async function sendMessage(text?: string) {
             applyActions(res.actions)
             ElMessage.success(res.reply || '已完成')
         }
-    } catch (err: any) {
+    } catch (err: unknown) {
         const lastMsg = messages.value[messages.value.length - 1]
         lastMsg.loading = false
+        const error = err as { response?: { data?: { error?: string } }; message?: string }
         if (lastMsg.content === '') {
-            lastMsg.content = '出错了: ' + (err?.response?.data?.error || err.message || '未知错误')
+            lastMsg.content = '出错了: ' + (error?.response?.data?.error || error?.message || '未知错误')
         }
         ElMessage.error(lastMsg.content)
     } finally {

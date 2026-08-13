@@ -40,7 +40,22 @@ export interface AIChatResponse {
     question?: string
     suggestions?: string[]
     plan?: AIPlan
+    nextStage?: AgentStage
+    validation?: {
+        valid: boolean
+        errorCount: number
+        warningCount: number
+        summary: string
+        issues: Array<Record<string, unknown>>
+    }
+    trace?: Array<Record<string, unknown>>
+    /** 会话标识：同一 threadId 下的执行状态由服务端 checkpoint 持久化 */
+    threadId?: string
+    /** 为 true 表示图已挂起等待用户输入，下次请求需带 threadId + resume 恢复 */
+    waitingForInput?: boolean
 }
+
+export type AgentStage = 'discover' | 'design' | 'plan' | 'confirm' | 'execute' | 'edit'
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:8000',
@@ -57,6 +72,18 @@ export async function chatWithAI(params: {
     canvasStyle: CanvasStyleData
     canvasWidth?: number
     canvasHeight?: number
+    selectedComponentIds?: string[]
+    viewport?: {
+        width: number
+        height: number
+        scale: number
+    }
+    projectKnowledge?: string
+    conversationStage?: AgentStage
+    /** 会话标识：首次留空由服务端生成，收到 waitingForInput=true 后必须带回 */
+    threadId?: string
+    /** 中断恢复数据：上次响应 waitingForInput=true 时，把用户本轮输入作为 resume 传回 */
+    resume?: unknown
     signal?: AbortSignal
 }): Promise<AIChatResponse> {
     const { signal, ...rest } = params

@@ -22,6 +22,11 @@ export interface MoveState {
 }
 
 /**
+ * 取消注册函数类型
+ */
+type Unregister = () => void
+
+/**
  * 编辑器上下文接口
  */
 export interface EditorContext {
@@ -34,16 +39,16 @@ export interface EditorContext {
 
   /** 隐藏框选区域 */
   hideArea(): void
-  /** 注册 hideArea 的回调（Area 组件注册，Editor 调用） */
-  onHideArea(callback: () => void): void
+  /** 注册 hideArea 的回调（Area 组件注册，Editor 调用）。返回取消注册函数。 */
+  onHideArea(callback: () => void): Unregister
 
   /** 触发动画播放 */
   runAnimation(): void
   /** 触发动画停止 */
   stopAnimation(): void
-  /** 注册动画回调（Shape 组件注册） */
-  onRunAnimation(callback: () => void): void
-  onStopAnimation(callback: () => void): void
+  /** 注册动画回调（Shape 组件注册）。返回取消注册函数。 */
+  onRunAnimation(callback: () => void): Unregister
+  onStopAnimation(callback: () => void): Unregister
 }
 
 const EDITOR_CONTEXT_KEY: InjectionKey<EditorContext> = Symbol('EditorContext')
@@ -61,6 +66,17 @@ export function provideEditorContext(): EditorContext {
     const hideAreaCallbacks: Array<() => void> = []
     const runAnimationCallbacks: Array<() => void> = []
     const stopAnimationCallbacks: Array<() => void> = []
+
+    function unregister<T extends () => void>(callbacks: T[], callback: T): Unregister {
+        const index = callbacks.indexOf(callback)
+        if (index !== -1) {
+            callbacks.splice(index, 1)
+        }
+        return () => {
+            const i = callbacks.indexOf(callback)
+            if (i !== -1) callbacks.splice(i, 1)
+        }
+    }
 
     const context: EditorContext = {
         moveState,
@@ -81,6 +97,7 @@ export function provideEditorContext(): EditorContext {
 
         onHideArea(callback) {
             hideAreaCallbacks.push(callback)
+            return () => unregister(hideAreaCallbacks, callback)
         },
 
         runAnimation() {
@@ -93,10 +110,12 @@ export function provideEditorContext(): EditorContext {
 
         onRunAnimation(callback) {
             runAnimationCallbacks.push(callback)
+            return () => unregister(runAnimationCallbacks, callback)
         },
 
         onStopAnimation(callback) {
             stopAnimationCallbacks.push(callback)
+            return () => unregister(stopAnimationCallbacks, callback)
         },
     }
 

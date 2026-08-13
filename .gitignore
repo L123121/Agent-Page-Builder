@@ -35,6 +35,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Runtime
+*.pid
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

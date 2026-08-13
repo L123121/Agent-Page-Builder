@@ -1,5 +1,8 @@
 <template>
-    <router-view />
+    <!-- ElementPlus 全局配置：size 保持原项目的 'small' -->
+    <el-config-provider size="small">
+        <router-view />
+    </el-config-provider>
 </template>
 
 <style>

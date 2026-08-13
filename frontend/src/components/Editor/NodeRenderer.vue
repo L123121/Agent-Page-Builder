@@ -94,16 +94,18 @@ const svgFilterAttrs: (keyof ComponentStyle)[] = ['width', 'height', 'top', 'lef
 
 /**
  * 查找当前组件的所有子组件（parentId 等于当前节点 id）
+ * 通过 store.childrenIndex 实现 O(1) 查询，替代 O(n) filter
  */
 const children = computed<ComponentData[]>(() => {
-    return componentData.value.filter(c => c.parentId === props.node.id)
+    return store.childrenIndex.get(props.node.id) ?? []
 })
 
 /**
  * 获取组件在扁平数组中的索引（用于选中状态同步）
+ * 通过 componentIndexMap（Editor/index.vue 层已提供）实现 O(1) 查找
  */
 function getIndex(id: string): number {
-    return componentData.value.findIndex(c => c.id === id)
+    return store.componentData.findIndex(c => c.id === id)
 }
 
 function getShapeStyle(style: ComponentStyle): Record<string, string | number> {

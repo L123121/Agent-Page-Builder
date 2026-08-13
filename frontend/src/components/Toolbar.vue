@@ -103,6 +103,9 @@
                 <!-- 更多 -->
                 <div class="btn-group">
                     <span class="group-label">更多</span>
+                    <el-button :icon="Files" size="small" @click="isShowPageManager = true">
+                        页面
+                    </el-button>
                     <el-button :icon="Clock" size="small" @click="showVersionHistory">
                         版本
                     </el-button>
@@ -145,6 +148,7 @@
 
         <Preview v-if="isShowPreview" :is-screenshot="isScreenshot" @close="handlePreviewChange" />
         <AceEditor v-if="isShowAceEditor" @close-editor="closeEditor" />
+        <PageManager v-if="isShowPageManager" v-model="isShowPageManager" />
 
         <el-drawer
             v-model="isShowVersionHistory"
@@ -213,11 +217,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
     Sunny, Moon, Edit, Upload, Download, RefreshLeft, RefreshRight,
     Picture, View, FolderChecked, Delete, Camera, Connection,
-    Remove, Lock, Unlock, Clock, Document, MagicStick,
+    Remove, Lock, Unlock, Clock, Document, MagicStick, Files,
 } from '@element-plus/icons-vue'
 import AIPanel from '@/components/AIPanel.vue'
 import type { ComponentData, CanvasStyleData, ComponentStyle } from '@/types'
 import { validateAuto } from '@/utils/validation'
+import PageManager from '@/components/PageManager.vue'
+import { usePageManager } from '@/composables/usePageManager'
 import { exportToHtml, downloadHtmlFile } from '@/utils/exportHtml'
 import {
     undo as undoAction,
@@ -238,6 +244,9 @@ interface ExportData {
 
 const store = useStore()
 const { componentData, canvasStyleData, areaData, curComponent, isDarkMode } = storeToRefs(store)
+
+// 页面管理（后端持久化）
+const { savePage } = usePageManager()
 
 // AI 面板
 const showAIPanel = ref(false)
@@ -382,16 +391,11 @@ function preview(screenshot: boolean): void {
 }
 
 function save(): void {
-    try {
-        // 保存到 localStorage(本地回退)
-        localStorage.setItem('canvasData', JSON.stringify(componentData.value))
-        localStorage.setItem('canvasStyle', JSON.stringify(canvasStyleData.value))
-        ElMessage.success('保存成功')
-    } catch (e) {
-        ElMessage.error('保存失败，请检查浏览器存储空间')
-        console.error('保存失败:', e)
-    }
+    // 保存到后端（localStorage 仍作为离线兜底，由 useAutoSave 负责）
+    savePage()
 }
+
+const isShowPageManager = ref(false)
 
 function clearCanvas(): void {
     ElMessageBox.confirm('确定要清空画布吗？', '提示', {

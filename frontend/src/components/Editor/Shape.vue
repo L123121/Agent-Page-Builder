@@ -24,7 +24,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useStore } from '@/store'
 import { storeToRefs } from 'pinia'
 import { RefreshRight, Lock } from '@element-plus/icons-vue'
@@ -88,6 +88,11 @@ const angleToCursor: AngleCursor[] = [
     { start: 293, end: 338, cursor: 'w' },
 ]
 const cursors = ref<Record<string, string>>({})
+
+// editorContext 动画回调的取消注册函数（onUnmounted 时清理）
+let unregisterRunAnimation: (() => void) | undefined
+let unregisterStopAnimation: (() => void) | undefined
+
 const editorCtx = useEditorContext()
 
 onMounted(() => {
@@ -95,9 +100,15 @@ onMounted(() => {
     if (curComponent.value) {
         cursors.value = getCursor() // 根据旋转角度获取光标位置
     }
-    // 通过 editorContext 注册动画回调（替代 eventBus）
-    editorCtx.onRunAnimation(handleRunAnimation)
-    editorCtx.onStopAnimation(handleStopAnimation)
+    // 通过 editorContext 注册动画回调（替代 eventBus），并记录取消函数以便卸载时清理
+    unregisterRunAnimation = editorCtx.onRunAnimation(handleRunAnimation)
+    unregisterStopAnimation = editorCtx.onStopAnimation(handleStopAnimation)
+})
+
+// 组件卸载时清理 editorContext 回调，防止内存泄漏与僵尸调用
+onUnmounted(() => {
+    unregisterRunAnimation?.()
+    unregisterStopAnimation?.()
 })
 
 function handleRunAnimation(): void {

@@ -1,0 +1,686 @@
+{
+  "mode": "live",
+  "taskCount": 7,
+  "passedCount": 3,
+  "passRate": 43,
+  "avgScore": 63,
+  "results": [
+    {
+      "taskId": "poster_dance_recruit",
+      "taskName": "街舞社招新海报",
+      "pass": false,
+      "score": 33,
+      "failures": [
+        {
+          "code": "MIN_COMPONENTS",
+          "message": "组件数 0 >= 3"
+        },
+        {
+          "code": "REQUIRE_COMPONENT_VText",
+          "message": "存在组件类型 VText"
+        },
+        {
+          "code": "REQUIRE_COMPONENT_VButton",
+          "message": "存在组件类型 VButton"
+        },
+        {
+          "code": "REQUIRE_TEXT_街舞",
+          "message": "文本内容包含「街舞」"
+        },
+        {
+          "code": "REQUIRE_TEXT_招新",
+          "message": "文本内容包含「招新」"
+        },
+        {
+          "code": "STAGE_REACHED",
+          "message": "最终阶段 confirm == edit"
+        }
+      ],
+      "passedChecks": [
+        {
+          "code": "VALIDATOR_PASS",
+          "message": "画布通过验证器（errors=0, warnings=0）"
+        },
+        {
+          "code": "MAX_STEPS",
+          "message": "工具步数 0 <= 14"
+        },
+        {
+          "code": "PLAN_WRITTEN",
+          "message": "planner 产出了设计方案并写入 state"
+        }
+      ],
+      "finalCanvas": [],
+      "canvasStyle": {
+        "width": 375,
+        "height": 667,
+        "scale": 100,
+        "color": "#000000",
+        "opacity": 100,
+        "backgroundColor": "#ffffff",
+        "fontSize": 14
+      },
+      "steps": [],
+      "trace": [
+        {
+          "step": 0,
+          "tool": "local_fallback",
+          "reason": "AI provider unavailable; local fallback enabled"
+        }
+      ],
+      "plan": {
+        "summary": "围绕“做一个街舞社招新海报”生成一版结构清晰的活动页面",
+        "details": [
+          "保留明确的标题、时间地点和核心说明",
+          "按照已选择的页面方向组织信息层级",
+          "使用已选择的视觉风格统一颜色与装饰",
+          "生成后执行越界、内容和对比度验证"
+        ]
+      },
+      "nextStage": "confirm",
+      "durationMs": 39359,
+      "tokenUsage": null,
+      "provider": "live"
+    },
+    {
+      "taskId": "poster_activity_promo",
+      "taskName": "活动宣传海报",
+      "pass": false,
+      "score": 22,
+      "failures": [
+        {
+          "code": "MIN_COMPONENTS",
+          "message": "组件数 0 >= 3"
+        },
+        {
+          "code": "REQUIRE_COMPONENT_VText",
+          "message": "存在组件类型 VText"
+        },
+        {
+          "code": "REQUIRE_TEXT_音乐节",
+          "message": "文本内容包含「音乐节」"
+        },
+        {
+          "code": "REQUIRE_TEXT_时间",
+          "message": "文本内容包含「时间」"
+        },
+        {
+          "code": "REQUIRE_TEXT_地点",
+          "message": "文本内容包含「地点」"
+        },
+        {
+          "code": "PLAN_WRITTEN",
+          "message": "planner 产出了设计方案并写入 state"
+        },
+        {
+          "code": "STAGE_REACHED",
+          "message": "最终阶段 design == edit"
+        }
+      ],
+      "passedChecks": [
+        {
+          "code": "VALIDATOR_PASS",
+          "message": "画布通过验证器（errors=0, warnings=0）"
+        },
+        {
+          "code": "MAX_STEPS",
+          "message": "工具步数 0 <= 14"
+        }
+      ],
+      "finalCanvas": [],
+      "canvasStyle": {
+        "width": 375,
+        "height": 667,
+        "scale": 100,
+        "color": "#000000",
+        "opacity": 100,
+        "backgroundColor": "#ffffff",
+        "fontSize": 14
+      },
+      "steps": [],
+      "trace": [
+        {
+          "step": 0,
+          "tool": "local_fallback",
+          "reason": "AI provider unavailable; local fallback enabled"
+        }
+      ],
+      "plan": null,
+      "nextStage": "design",
+      "durationMs": 7890,
+      "tokenUsage": null,
+      "provider": "live"
+    },
+    {
+      "taskId": "form_registration",
+      "taskName": "社团报名表",
+      "pass": false,
+      "score": 20,
+      "failures": [
+        {
+          "code": "MIN_COMPONENTS",
+          "message": "组件数 0 >= 3"
+        },
+        {
+          "code": "REQUIRE_COMPONENT_VText",
+          "message": "存在组件类型 VText"
+        },
+        {
+          "code": "REQUIRE_COMPONENT_VButton",
+          "message": "存在组件类型 VButton"
+        },
+        {
+          "code": "REQUIRE_TEXT_报名",
+          "message": "文本内容包含「报名」"
+        },
+        {
+          "code": "REQUIRE_TEXT_姓名",
+          "message": "文本内容包含「姓名」"
+        },
+        {
+          "code": "REQUIRE_TEXT_联系",
+          "message": "文本内容包含「联系」"
+        },
+        {
+          "code": "PLAN_WRITTEN",
+          "message": "planner 产出了设计方案并写入 state"
+        },
+        {
+          "code": "STAGE_REACHED",
+          "message": "最终阶段 design == edit"
+        }
+      ],
+      "passedChecks": [
+        {
+          "code": "VALIDATOR_PASS",
+          "message": "画布通过验证器（errors=0, warnings=0）"
+        },
+        {
+          "code": "MAX_STEPS",
+          "message": "工具步数 0 <= 14"
+        }
+      ],
+      "finalCanvas": [],
+      "canvasStyle": {
+        "width": 375,
+        "height": 667,
+        "scale": 100,
+        "color": "#000000",
+        "opacity": 100,
+        "backgroundColor": "#ffffff",
+        "fontSize": 14
+      },
+      "steps": [],
+      "trace": [
+        {
+          "step": 0,
+          "tool": "local_fallback",
+          "reason": "AI provider unavailable; local fallback enabled"
+        }
+      ],
+      "plan": null,
+      "nextStage": "design",
+      "durationMs": 7343,
+      "tokenUsage": null,
+      "provider": "live"
+    },
+    {
+      "taskId": "edit_title_font",
+      "taskName": "修改标题字号",
+      "pass": true,
+      "score": 100,
+      "failures": [],
+      "passedChecks": [
+        {
+          "code": "MIN_COMPONENTS",
+          "message": "组件数 2 >= 2"
+        },
+        {
+          "code": "REQUIRE_COMPONENT_VText",
+          "message": "存在组件类型 VText"
+        },
+        {
+          "code": "VALIDATOR_PASS",
+          "message": "画布通过验证器（errors=0, warnings=1）"
+        },
+        {
+          "code": "MAX_STEPS",
+          "message": "工具步数 0 <= 8"
+        },
+        {
+          "code": "TITLE_FONT_SIZE",
+          "message": "标题字号 36.0 >= 28"
+        },
+        {
+          "code": "STAGE_REACHED",
+          "message": "最终阶段 edit == edit"
+        }
+      ],
+      "finalCanvas": [
+        {
+          "id": "title_1",
+          "component": "VText",
+          "label": "主标题",
+          "icon": "",
+          "propValue": "招新海报",
+          "style": {
+            "width": 300,
+            "height": 60,
+            "top": 60,
+            "left": 37,
+            "rotate": 0,
+            "opacity": 1,
+            "fontSize": 36,
+            "fontWeight": 700,
+            "lineHeight": "",
+            "letterSpacing": 0,
+            "textAlign": "center",
+            "color": "#333333",
+            "backgroundColor": "",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 1,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        },
+        {
+          "id": "btn_1",
+          "component": "VButton",
+          "label": "报名按钮",
+          "icon": "",
+          "propValue": "立即报名",
+          "style": {
+            "width": 200,
+            "height": 48,
+            "top": 400,
+            "left": 87,
+            "rotate": 0,
+            "opacity": 1,
+            "fontSize": 18,
+            "fontWeight": 400,
+            "lineHeight": "",
+            "letterSpacing": 0,
+            "textAlign": "center",
+            "color": "#ffffff",
+            "backgroundColor": "#409eff",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "8",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 2,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        }
+      ],
+      "canvasStyle": {
+        "width": 375,
+        "height": 667,
+        "scale": 100,
+        "color": "#000000",
+        "opacity": 100,
+        "backgroundColor": "#ffffff",
+        "fontSize": 14
+      },
+      "steps": [],
+      "trace": [
+        {
+          "step": 1,
+          "tool": "edit_page",
+          "execution": [
+            {
+              "type": "modify",
+              "status": "success",
+              "id": "title_1"
+            }
+          ],
+          "autoFixes": [],
+          "validation": {
+            "valid": true,
+            "errorCount": 0,
+            "warningCount": 0,
+            "issues": [],
+            "summary": "0 个错误，0 个警告"
+          }
+        }
+      ],
+      "plan": null,
+      "nextStage": "edit",
+      "durationMs": 4015,
+      "tokenUsage": null,
+      "provider": "live"
+    },
+    {
+      "taskId": "delete_component",
+      "taskName": "删除图片",
+      "pass": true,
+      "score": 100,
+      "failures": [],
+      "passedChecks": [
+        {
+          "code": "MIN_COMPONENTS",
+          "message": "组件数 1 >= 1"
+        },
+        {
+          "code": "FORBID_COMPONENT_Picture",
+          "message": "未包含组件类型 Picture"
+        },
+        {
+          "code": "VALIDATOR_PASS",
+          "message": "画布通过验证器（errors=0, warnings=0）"
+        },
+        {
+          "code": "MAX_STEPS",
+          "message": "工具步数 0 <= 6"
+        },
+        {
+          "code": "STAGE_REACHED",
+          "message": "最终阶段 edit == edit"
+        }
+      ],
+      "finalCanvas": [
+        {
+          "id": "title_1",
+          "component": "VText",
+          "label": "标题",
+          "icon": "",
+          "propValue": "页面标题",
+          "style": {
+            "width": 300,
+            "height": 60,
+            "top": 60,
+            "left": 37,
+            "rotate": 0,
+            "opacity": 1,
+            "fontSize": 24,
+            "fontWeight": 700,
+            "lineHeight": "",
+            "letterSpacing": 0,
+            "textAlign": "center",
+            "color": "#333333",
+            "backgroundColor": "",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 1,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        }
+      ],
+      "canvasStyle": {
+        "width": 375,
+        "height": 667,
+        "scale": 100,
+        "color": "#000000",
+        "opacity": 100,
+        "backgroundColor": "#ffffff",
+        "fontSize": 14
+      },
+      "steps": [],
+      "trace": [
+        {
+          "step": 1,
+          "tool": "edit_page",
+          "execution": [
+            {
+              "type": "delete",
+              "status": "success",
+              "id": "pic_1"
+            }
+          ],
+          "autoFixes": [],
+          "validation": {
+            "valid": true,
+            "errorCount": 0,
+            "warningCount": 0,
+            "issues": [],
+            "summary": "0 个错误，0 个警告"
+          }
+        }
+      ],
+      "plan": null,
+      "nextStage": "edit",
+      "durationMs": 1297,
+      "tokenUsage": null,
+      "provider": "live"
+    },
+    {
+      "taskId": "layout_center_focus",
+      "taskName": "居中聚焦布局",
+      "pass": true,
+      "score": 100,
+      "failures": [],
+      "passedChecks": [
+        {
+          "code": "MIN_COMPONENTS",
+          "message": "组件数 2 >= 2"
+        },
+        {
+          "code": "REQUIRE_COMPONENT_VText",
+          "message": "存在组件类型 VText"
+        },
+        {
+          "code": "VALIDATOR_PASS",
+          "message": "画布通过验证器（errors=0, warnings=0）"
+        },
+        {
+          "code": "MAX_STEPS",
+          "message": "工具步数 0 <= 8"
+        },
+        {
+          "code": "LAYOUT_APPLIED",
+          "message": "组件被重新排布（布局已应用）"
+        },
+        {
+          "code": "CENTERED_TITLE",
+          "message": "标题水平居中（容差 30px）"
+        },
+        {
+          "code": "STAGE_REACHED",
+          "message": "最终阶段 edit == edit"
+        }
+      ],
+      "finalCanvas": [
+        {
+          "id": "t1",
+          "component": "VText",
+          "label": "标题",
+          "icon": "",
+          "propValue": "活动标题",
+          "style": {
+            "width": 300,
+            "height": 60,
+            "top": 80,
+            "left": 38,
+            "rotate": 0,
+            "opacity": 1,
+            "fontSize": 24,
+            "fontWeight": 700,
+            "lineHeight": "",
+            "letterSpacing": 0,
+            "textAlign": "center",
+            "color": "#333333",
+            "backgroundColor": "",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 1,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        },
+        {
+          "id": "t2",
+          "component": "VText",
+          "label": "正文",
+          "icon": "",
+          "propValue": "详情说明",
+          "style": {
+            "width": 300,
+            "height": 60,
+            "top": 170,
+            "left": 38,
+            "rotate": 0,
+            "opacity": 1,
+            "fontSize": 16,
+            "fontWeight": 400,
+            "lineHeight": "",
+            "letterSpacing": 0,
+            "textAlign": "center",
+            "color": "#333333",
+            "backgroundColor": "",
+            "borderColor": "",
+            "borderWidth": 0,
+            "borderStyle": "solid",
+            "borderRadius": "",
+            "padding": 4
+          },
+          "parentId": null,
+          "slot": "default",
+          "zIndex": 2,
+          "animations": [],
+          "events": {},
+          "groupStyle": {},
+          "isLock": false,
+          "collapseName": "style",
+          "linkage": {
+            "duration": 0,
+            "data": []
+          }
+        }
+      ],
+      "canvasStyle": {
+        "width": 375,
+        "height": 667,
+        "scale": 100,
+        "color": "#000000",
+        "opacity": 100,
+        "backgroundColor": "#ffffff",
+        "fontSize": 14
+      },
+      "steps": [],
+      "trace": [
+        {
+          "step": 1,
+          "tool": "edit_page",
+          "execution": [
+            {
+              "type": "modify",
+              "status": "success",
+              "id": "t1"
+            },
+            {
+              "type": "modify",
+              "status": "success",
+              "id": "t2"
+            }
+          ],
+          "autoFixes": [],
+          "validation": {
+            "valid": true,
+            "errorCount": 0,
+            "warningCount": 0,
+            "issues": [],
+            "summary": "0 个错误，0 个警告"
+          }
+        }
+      ],
+      "plan": null,
+      "nextStage": "edit",
+      "durationMs": 3360,
+      "tokenUsage": null,
+      "provider": "live"
+    },
+    {
+      "taskId": "empty_canvas_vague",
+      "taskName": "空画布模糊需求（应询问方向）",
+      "pass": false,
+      "score": 67,
+      "failures": [
+        {
+          "code": "REQUIRE_INITIAL_CHOICE",
+          "message": "模糊需求触发了方向确认"
+        }
+      ],
+      "passedChecks": [
+        {
+          "code": "MIN_COMPONENTS",
+          "message": "组件数 0 >= 0"
+        },
+        {
+          "code": "MAX_STEPS",
+          "message": "工具步数 0 <= 3"
+        }
+      ],
+      "finalCanvas": [],
+      "canvasStyle": {
+        "width": 375,
+        "height": 667,
+        "scale": 100,
+        "color": "#000000",
+        "opacity": 100,
+        "backgroundColor": "#ffffff",
+        "fontSize": 14
+      },
+      "steps": [],
+      "trace": [
+        {
+          "step": 0,
+          "tool": "local_fallback",
+          "reason": "AI provider unavailable; local fallback enabled"
+        }
+      ],
+      "plan": null,
+      "nextStage": "plan",
+      "durationMs": 26218,
+      "tokenUsage": null,
+      "provider": "live"
+    }
+  ]
+}

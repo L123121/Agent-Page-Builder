@@ -30,13 +30,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useStore } from '@/store'
 import { storeToRefs } from 'pinia'
 import request from '@/utils/request'
 import eventBus from '@/utils/eventBus'
 import { useOnEvent } from '../common/useOnEvent'
 import { sanitizeHtml } from '@/utils/sanitize'
+import { changeStyleWithCommand } from '@/composables/useCommandActions'
 import type { ComponentData, RequestConfig, LinkageConfig } from '@/types'
 
 interface Props {
@@ -59,6 +60,8 @@ const textRef = ref<HTMLElement | null>(null)
 const canEdit = ref(false)
 const isCtrlDown = ref(false)
 let cancelRequest: (() => void) | null = null
+/** 开始编辑时的原始文案（撤销用） */
+let editStartValue = ''
 
 // 需要阻止冒泡的快捷键（与 shortcutKey.ts 中的映射一致）
 const shortcutKeys = new Set(['b', 'c', 'd', 'e', 'g', 'l', 'p', 's', 'u', 'v', 'x', 'y', 'z'])
@@ -143,17 +146,9 @@ function clearStyle(e: ClipboardEvent): void {
 function handleBlur(e: Event): void {
     const target = e.target as HTMLElement
     const html = sanitizeHtml(target.innerHTML)
-    if (html !== '') {
-        // eslint-disable-next-line vue/no-mutating-props -- 画布元素是 store 引用，文本组件负责就地编辑
-        props.element.propValue = html
-    } else {
-        // eslint-disable-next-line vue/no-mutating-props -- 画布元素是 store 引用，文本组件负责就地编辑
-        props.element.propValue = ''
-        nextTick(() => {
-            // eslint-disable-next-line vue/no-mutating-props -- 保留空文本占位，避免 contenteditable 塌陷
-            props.element.propValue = '&nbsp;'
-        })
-    }
+    // 画布就地编辑通过增量命令提交（记录开始编辑时的旧值，便于撤销）
+    const finalValue = html !== '' ? html : '&nbsp;'
+    changeStyleWithCommand(props.element.id, 'propValue', editStartValue, finalValue)
     canEdit.value = false
 }
 
@@ -161,6 +156,8 @@ function setEdit(): void {
     if (props.element.isLock) return
 
     canEdit.value = true
+    // 记录编辑前的原始文案（撤销用）
+    editStartValue = String(props.element.propValue ?? '')
     // 全选
     if (textRef.value) {
         selectText(textRef.value)

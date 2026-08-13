@@ -40,6 +40,7 @@ import CommonAttr from './common/CommonAttr.vue'
 import { getComponentMeta, getAttrComponent } from './registry'
 import { getControl } from './controls'
 import type { PropConfig } from './registry'
+import { changeStyleWithCommand } from '@/composables/useCommandActions'
 
 const store = useStore()
 const { curComponent } = storeToRefs(store)
@@ -91,20 +92,8 @@ function getValue(path: string): unknown {
  */
 function setValue(path: string, value: unknown): void {
     if (!curComponent.value) return
-    const keys = path.split('.')
-    const lastKey = keys.pop()!
-    const target = keys.reduce((obj: unknown, key: string) => {
-        if (obj && typeof obj === 'object') {
-            return (obj as Record<string, unknown>)[key]
-        }
-        return undefined
-    }, curComponent.value as unknown as Record<string, unknown>)
-
-    if (target && typeof target === 'object') {
-        (target as Record<string, unknown>)[lastKey] = value
-        // 触发数据变更标记
-        store.markDataDirty()
-    }
+    const oldValue = getValue(path)
+    changeStyleWithCommand(curComponent.value.id, path, oldValue, value)
 }
 </script>
 

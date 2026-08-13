@@ -32,6 +32,8 @@ export const useStore = defineStore('main', {
             fontSize: 14,
         },
         componentData: [],
+        // parentId → 子组件数组 的索引，O(1) 查询子组件（替代 O(n) filter）
+        childrenIndex: new Map<string, ComponentData[]>(),
         curComponent: null,
         curComponentIndex: null,
         isClickComponent: false,
@@ -54,6 +56,11 @@ export const useStore = defineStore('main', {
         },
         versions: [],
         dataVersion: 0,
+        // 后端持久化状态
+        currentPageId: null,
+        currentPageTitle: '未命名页面',
+        isSaving: false,
+        lastSyncedVersion: 0,
     }),
 
     actions: {
@@ -83,6 +90,25 @@ export const useStore = defineStore('main', {
 
         setAreaData(data: AreaData): void {
             this.areaData = data
+        },
+
+        // ==================== 后端持久化 ====================
+
+        /** 设置当前页面 ID（打开已有页面或保存新页面后调用） */
+        setCurrentPage(id: string, title?: string): void {
+            this.currentPageId = id
+            if (title !== undefined) this.currentPageTitle = title
+            this.lastSyncedVersion = this.dataVersion
+        },
+
+        /** 标记已与后端同步 */
+        markSynced(): void {
+            this.lastSyncedVersion = this.dataVersion
+        },
+
+        /** 当前数据是否与后端有未同步的变更 */
+        isDirty(): boolean {
+            return this.dataVersion !== this.lastSyncedVersion
         },
 
         setCanvasStyle(style: CanvasStyleData): void {
@@ -115,6 +141,55 @@ export const useStore = defineStore('main', {
             // 统一图层策略：数组顺序为准，zIndex 按数组顺序连续镜像
             this.ensureZIndex()
             this.markDataDirty()
+            this.rebuildChildrenIndex()
+        },
+
+        /**
+         * 重建 parentId → children[] 索引。
+         * 在 setComponentData（全量设置）后调用，保证索引与 componentData 一致。
+         */
+        rebuildChildrenIndex(): void {
+            const index = new Map<string, ComponentData[]>()
+            for (const c of this.componentData) {
+                if (c.parentId) {
+                    const list = index.get(c.parentId)
+                    if (list) {
+                        list.push(c)
+                    } else {
+                        index.set(c.parentId, [c])
+                    }
+                }
+            }
+            this.childrenIndex = index
+        },
+
+        /**
+         * 增量插入组件到 childrenIndex。
+         */
+        indexAddComponent(component: ComponentData): void {
+            if (!component.parentId) return
+            const list = this.childrenIndex.get(component.parentId)
+            if (list) {
+                list.push(component)
+            } else {
+                this.childrenIndex.set(component.parentId, [component])
+            }
+        },
+
+        /**
+         * 增量从 childrenIndex 移除组件。
+         */
+        indexRemoveComponent(component: ComponentData): void {
+            if (!component.parentId) return
+            const list = this.childrenIndex.get(component.parentId)
+            if (!list) return
+            const i = list.findIndex(c => c.id === component.id)
+            if (i !== -1) {
+                list.splice(i, 1)
+                if (list.length === 0) {
+                    this.childrenIndex.delete(component.parentId)
+                }
+            }
         },
 
         addComponent({ component, index }: AddComponentPayload): void {
@@ -122,6 +197,7 @@ export const useStore = defineStore('main', {
             this.componentData.splice(insertIndex, 0, component)
             normalizeComponentZIndex(this.componentData)
             this.markDataDirty()
+            this.indexAddComponent(component)
         },
 
         /**
@@ -144,7 +220,11 @@ export const useStore = defineStore('main', {
             }
 
             if (typeof index === 'number' && index >= 0) {
-                this.componentData.splice(index, 1)
+                // 先记录被删组件信息，用于增量更新 childrenIndex
+                const [removed] = this.componentData.splice(index, 1)
+                if (removed) {
+                    this.indexRemoveComponent(removed)
+                }
                 normalizeComponentZIndex(this.componentData)
                 this.markDataDirty()
             }

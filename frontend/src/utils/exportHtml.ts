@@ -13,7 +13,7 @@
  * - 图片资源以 URL 形式引用
  */
 
-import type { ComponentData, CanvasStyleData, Animation } from '@/types'
+import type { ComponentData, CanvasStyleData, Animation, ComponentStyle } from '@/types'
 import { escapeHtml, isValidImageUrl, isValidCssColor } from './sanitize'
 
 // ==================== 嵌入的动画关键帧（animate.css 子集） ====================
@@ -69,7 +69,8 @@ interface RenderContext {
 /**
  * 将组件样式转换为内联 CSS 字符串
  */
-function styleToInline(style: Record<string, unknown>): string {
+/** 将组件样式对象转为内联 style 字符串 */
+function styleToInline(style: ComponentStyle): string {
     const styleMap: Record<string, string> = {
         width: 'width',
         height: 'height',
@@ -146,7 +147,7 @@ function getAnimationAttributes(animations: Animation[]): string {
 function renderVText(ctx: RenderContext): string {
     const { component } = ctx
     const text = component.propValue as string || ''
-    const style = styleToInline(component.style as unknown as Record<string, unknown>)
+    const style = styleToInline(component.style)
     const animAttr = getAnimationAttributes(component.animations)
     const escapedText = text
         .replace(/&/g, '&amp;')
@@ -163,7 +164,7 @@ function renderVText(ctx: RenderContext): string {
 function renderVButton(ctx: RenderContext): string {
     const { component } = ctx
     const text = component.propValue as string || ''
-    const style = styleToInline(component.style as unknown as Record<string, unknown>)
+    const style = styleToInline(component.style)
     const animAttr = getAnimationAttributes(component.animations)
     const escapedText = escapeHtml(text)
     const eventData = buildEventAttribute(component.events)
@@ -177,7 +178,7 @@ function renderVButton(ctx: RenderContext): string {
 function renderPicture(ctx: RenderContext): string {
     const { component } = ctx
     const propValue = component.propValue as { url?: string; flip?: { horizontal?: boolean; vertical?: boolean } } || {}
-    const style = styleToInline(component.style as unknown as Record<string, unknown>)
+    const style = styleToInline(component.style)
     const imgUrl = propValue.url || ''
     const safeUrl = isValidImageUrl(imgUrl) ? escapeHtml(imgUrl) : ''
     const flipTransform = []
@@ -195,7 +196,7 @@ function renderPicture(ctx: RenderContext): string {
 function renderRectShape(ctx: RenderContext): string {
     const { component } = ctx
     const text = component.propValue as string || ''
-    const baseStyle = styleToInline(component.style as unknown as Record<string, unknown>)
+    const baseStyle = styleToInline(component.style)
     const style = `position:absolute; overflow:hidden; ${baseStyle}`
     const animAttr = getAnimationAttributes(component.animations)
     const childrenHtml = renderChildren(ctx)
@@ -210,7 +211,7 @@ function renderRectShape(ctx: RenderContext): string {
 function renderCircleShape(ctx: RenderContext): string {
     const { component } = ctx
     const text = component.propValue as string || ''
-    const baseStyle = styleToInline(component.style as unknown as Record<string, unknown>)
+    const baseStyle = styleToInline(component.style)
     const style = `position:absolute; display:flex; align-items:center; justify-content:center; overflow:hidden; ${baseStyle}`
     const animAttr = getAnimationAttributes(component.animations)
     const escapedText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -223,7 +224,7 @@ function renderCircleShape(ctx: RenderContext): string {
  */
 function renderLineShape(ctx: RenderContext): string {
     const { component } = ctx
-    const baseStyle = styleToInline(component.style as unknown as Record<string, unknown>)
+    const baseStyle = styleToInline(component.style)
     const animAttr = getAnimationAttributes(component.animations)
 
     return `<div ${animAttr} style="position:absolute; ${baseStyle}"></div>`
@@ -272,7 +273,7 @@ function renderSVGTriangle(ctx: RenderContext): string {
  */
 function renderVTable(ctx: RenderContext): string {
     const { component } = ctx
-    const style = styleToInline(component.style as unknown as Record<string, unknown>)
+    const style = styleToInline(component.style)
     const propValue = component.propValue as { data?: string[][]; stripe?: boolean; thBold?: boolean } || {}
     const data = propValue.data || []
     const animAttr = getAnimationAttributes(component.animations)
@@ -299,7 +300,7 @@ function renderVTable(ctx: RenderContext): string {
  */
 function renderVChart(ctx: RenderContext): string {
     const { component } = ctx
-    const style = styleToInline(component.style as unknown as Record<string, unknown>)
+    const style = styleToInline(component.style)
     const animAttr = getAnimationAttributes(component.animations)
 
     return `<div ${animAttr} style="position:absolute; display:flex; align-items:center; justify-content:center; background:#f5f5f5; color:#999; font-size:14px; ${style}"><div style="text-align:center;"><div>📊 图表</div><div style="font-size:12px;margin-top:4px;">导出 HTML 暂不支持动态图表</div></div></div>`
@@ -310,7 +311,7 @@ function renderVChart(ctx: RenderContext): string {
  */
 function renderGroup(ctx: RenderContext): string {
     const { component } = ctx
-    const style = styleToInline(component.style as unknown as Record<string, unknown>)
+    const style = styleToInline(component.style)
     const children = component.propValue as ComponentData[]
 
     let childrenHtml = ''
@@ -352,7 +353,7 @@ function renderComponent(ctx: RenderContext): string {
     const renderer = RENDERERS[ctx.component.component]
     if (!renderer) {
     // 未知组件，渲染为空白占位
-        const style = styleToInline(ctx.component.style as unknown as Record<string, unknown>)
+        const style = styleToInline(ctx.component.style)
         return `<div style="position:absolute; display:flex; align-items:center; justify-content:center; background:#eee; color:#999; font-size:12px; ${style}">${ctx.component.component}</div>`
     }
     return renderer(ctx)

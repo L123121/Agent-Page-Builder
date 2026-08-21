@@ -49,6 +49,8 @@ class AIChatRequest(BaseModel):
     # 前端收到 waitingForInput=true 后，凭 threadId + resume 继续上次中断的图执行
     threadId: str | None = None
     resume: Any | None = None
+    # 参考图：data URL (image/...)，全模态模型直接"看到"图片 + 文字，无需前置解析
+    image: str | None = None
 
 
 class AIChatResponse(BaseModel):

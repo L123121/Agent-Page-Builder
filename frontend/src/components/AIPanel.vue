@@ -28,6 +28,33 @@
                 </div>
             </div>
 
+            <!-- 流式进度条（Agent 执行中展示） -->
+            <div v-if="isStreaming" class="ai-streaming">
+                <div class="ai-streaming-header">
+                    <span class="ai-streaming-dot" />
+                    <span>Agent 执行中 · 第 {{ streamingSteps.length }} 步</span>
+                </div>
+                <div
+                    v-for="step in streamingSteps"
+                    :key="step.step"
+                    class="ai-streaming-step"
+                    :class="step.status"
+                >
+                    <span class="step-icon">
+                        {{ step.status === 'done' ? '✅' :
+                           step.status === 'error' ? '❌' :
+                           step.status === 'running' ? '⏳' : '⏸' }}
+                    </span>
+                    <span class="step-tool">{{ toolLabels[step.tool] || step.tool }}</span>
+                    <span v-if="step.autoFixes?.length" class="step-fixes">
+                        修复 {{ step.autoFixes.length }} 项
+                    </span>
+                    <span v-if="step.validation && !step.validation.valid" class="step-warn">
+                        {{ step.validation.errorCount }} 错误
+                    </span>
+                </div>
+            </div>
+
             <!-- 对话消息 -->
             <div v-for="(msg, i) in messages" :key="i" class="ai-msg" :class="msg.role">
                 <div class="ai-msg-bubble">
@@ -85,12 +112,29 @@
             </div>
         </div>
 
+        <!-- 图片上传预览区 -->
+        <div v-if="uploadedImage" class="ai-image-preview">
+            <img :src="uploadedImage" alt="参考图" />
+            <el-button text size="small" @click="removeImage">✕ 移除</el-button>
+        </div>
+        <!-- 工具栏 -->
+        <div class="ai-panel-toolbar">
+            <el-upload
+                :show-file-list="false"
+                accept="image/*"
+                :before-upload="handleImageUpload"
+            >
+                <el-button text size="small" title="上传参考图（海报/草图）">
+                    📎 上传参考图
+                </el-button>
+            </el-upload>
+        </div>
         <div class="ai-panel-footer">
             <el-input
                 v-model="inputText"
                 type="textarea"
                 :rows="2"
-                :placeholder="hasComponents ? '继续说，比如「标题改大一点」' : '描述你想要的海报或报名表...'"
+                :placeholder="uploadedImage ? '描述你想要如何修改参考图...' : (hasComponents ? '继续说，比如「标题改大一点」' : '描述你想要的海报或报名表...')"
                 :disabled="loading"
                 @keydown.enter.prevent="handleSend"
                 @keydown.shift.enter="(e: KeyboardEvent) => { /* Shift+Enter = 换行，默认行为 */ }"
@@ -112,7 +156,7 @@
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { Close } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { chatWithAI, type ChatMessage, type AIAction, type AIOption, type AIPlan, type AgentStage } from '@/api/ai'
+import { chatWithAI, chatWithAIStream, type ChatMessage, type AIAction, type AIOption, type AIPlan, type AgentStage, type StreamEvent } from '@/api/ai'
 import { useStore } from '@/store'
 import {
     importDataWithCommand,
@@ -147,6 +191,50 @@ interface DisplayMessage {
 }
 const messages = ref<DisplayMessage[]>([])
 const conversationStage = ref<AgentStage>('discover')
+/** 上传的参考图 data URL，仅首轮携带 */
+const uploadedImage = ref<string | null>(null)
+
+// ==================== 流式进度状态 ====================
+interface StreamingStep {
+    step: number
+    tool: string
+    status: 'pending' | 'running' | 'done' | 'error'
+    validation?: { valid: boolean; errorCount: number; warningCount: number }
+    autoFixes?: Array<Record<string, unknown>>
+}
+const streamingSteps = ref<StreamingStep[]>([])
+const isStreaming = ref(false)
+
+/** 工具名 → 中文标签 */
+const toolLabels: Record<string, string> = {
+    propose_options: '生成选项',
+    ask_question: '提出问题',
+    confirm_plan: '确认方案',
+    generate_page: '生成页面',
+    edit_page: '修改页面',
+    finish: '完成',
+}
+
+/** 上传图片：压缩到 1024px 以内，避免 token 爆炸 */
+function handleImageUpload(file: File): false {
+    const reader = new FileReader()
+    reader.onload = () => {
+        const img = new Image()
+        img.onload = () => {
+            const canvas = document.createElement('canvas')
+            const scale = Math.min(1, 1024 / Math.max(img.width, img.height))
+            canvas.width = Math.round(img.width * scale)
+            canvas.height = Math.round(img.height * scale)
+            canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height)
+            uploadedImage.value = canvas.toDataURL('image/jpeg', 0.8)
+        }
+        img.src = reader.result as string
+    }
+    reader.readAsDataURL(file)
+    return false
+}
+
+function removeImage() { uploadedImage.value = null }
 
 const hasComponents = computed(() => store.componentData.length > 0)
 const selectedComponentIds = computed(() => {
@@ -262,6 +350,10 @@ async function sendMessage(text?: string) {
     loading.value = true
     loadingText.value = 'AI 正在思考...'
 
+    // 初始化流式进度
+    streamingSteps.value = []
+    isStreaming.value = true
+
     try {
         // 构建对话历史（不含 loading 占位）
         const history: ChatMessage[] = messages.value
@@ -269,14 +361,8 @@ async function sendMessage(text?: string) {
             .slice(0, -1)
             .map(m => ({ role: m.role, content: m.content }))
 
-        // 超时控制
-        currentAbortController = new AbortController()
-        const timeoutId = setTimeout(() => {
-            currentAbortController!.abort()
-            loadingText.value = '请求超时，请重试'
-        }, AI_TIMEOUT)
-
-        const res = await chatWithAI({
+        // 流式调用：逐事件更新进度
+        const res = await chatWithAIStream({
             prompt,
             history,
             components: store.componentData,
@@ -291,14 +377,42 @@ async function sendMessage(text?: string) {
             },
             projectKnowledge: `页面名称：${store.currentPageTitle}。优先复用当前组件结构，遵守现有画布尺寸和视觉风格。`,
             conversationStage: conversationStage.value,
-            // 中断恢复：上次响应 waitingForInput=true 时，把用户本轮输入作为 resume 传回
             threadId: aiThreadId.value || undefined,
-            resume: waitingForInput.value ? prompt : undefined,
-            signal: currentAbortController.signal,
+            image: uploadedImage.value || undefined,
+        }, (event: StreamEvent) => {
+            // 每收到一个事件，更新流式进度 UI
+            if (event.type === 'tool_call') {
+                streamingSteps.value.push({
+                    step: event.step ?? streamingSteps.value.length + 1,
+                    tool: event.tool || '',
+                    status: 'running',
+                })
+            } else if (event.type === 'tool_result') {
+                const step = streamingSteps.value.find(s => s.step === event.step)
+                if (step) {
+                    step.status = event.status === 'done' ? 'done' : 'error'
+                    step.validation = event.validation
+                    step.autoFixes = event.autoFixes
+                }
+            } else if (event.type === 'agent_error') {
+                const lastMsg = messages.value[messages.value.length - 1]
+                if (lastMsg) {
+                    lastMsg.content = `出错了: ${event.error || '未知错误'}`
+                }
+            }
         })
 
-        clearTimeout(timeoutId)
-        currentAbortController = null
+        // 发送后清空参考图（仅首轮携带，后续多轮不带）
+        uploadedImage.value = null
+        isStreaming.value = false
+
+        if (!res) {
+            // 无结果（异常中断）
+            const lastMsg = messages.value[messages.value.length - 1]
+            lastMsg.loading = false
+            if (!lastMsg.content) lastMsg.content = 'AI 处理中断，请重试'
+            return
+        }
 
         // 更新 AI 回复
         const lastMsg = messages.value[messages.value.length - 1]
@@ -334,12 +448,13 @@ async function sendMessage(text?: string) {
         const lastMsg = messages.value[messages.value.length - 1]
         lastMsg.loading = false
         const error = err as { response?: { data?: { error?: string } }; message?: string }
-        if (lastMsg.content === '') {
+        if (lastMsg && lastMsg.content === '') {
             lastMsg.content = '出错了: ' + (error?.response?.data?.error || error?.message || '未知错误')
         }
-        ElMessage.error(lastMsg.content)
+        ElMessage.error(lastMsg?.content || '请求失败')
     } finally {
         loading.value = false
+        isStreaming.value = false
     }
 }
 
@@ -594,6 +709,31 @@ function applyActions(actions: AIAction[]) {
     30% { opacity: 1; transform: translateY(-4px); }
 }
 
+.ai-image-preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-top: 1px solid #ebeef5;
+    background: #fafafa;
+
+    img {
+        max-height: 80px;
+        max-width: 120px;
+        border-radius: 6px;
+        border: 1px solid #e4e7ed;
+        object-fit: cover;
+    }
+}
+
+.ai-panel-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 4px 16px;
+    border-top: 1px solid #ebeef5;
+    background: #fff;
+}
+
 .ai-panel-footer {
     padding: 12px 16px;
     border-top: 1px solid #ebeef5;
@@ -702,5 +842,76 @@ function applyActions(actions: AIAction[]) {
 .ai-plan-actions {
     display: flex;
     gap: 8px;
+}
+
+// ==================== 流式进度 UI ====================
+
+.ai-streaming {
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    background: #f8f9fb;
+    border: 1px solid #e4e7ed;
+    border-radius: 10px;
+}
+
+.ai-streaming-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #606266;
+    margin-bottom: 8px;
+}
+
+.ai-streaming-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #409eff;
+    animation: streaming-pulse 1.2s infinite;
+}
+
+@keyframes streaming-pulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.2); }
+}
+
+.ai-streaming-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 12px;
+    color: #303133;
+
+    &.done { color: #67c23a; }
+    &.error { color: #f56c6c; }
+    &.running { color: #409eff; }
+}
+
+.step-icon {
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+}
+
+.step-tool {
+    font-weight: 500;
+}
+
+.step-fixes {
+    font-size: 11px;
+    color: #e6a23c;
+    background: #fdf6ec;
+    padding: 1px 6px;
+    border-radius: 8px;
+}
+
+.step-warn {
+    font-size: 11px;
+    color: #f56c6c;
+    background: #fef0f0;
+    padding: 1px 6px;
+    border-radius: 8px;
 }
 </style>

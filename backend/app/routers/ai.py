@@ -1,9 +1,12 @@
 """AI 对话路由 — 调用 LangGraph Agent（单节点 + 5 工具）"""
 
+import json
+
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.schemas.ai import AIChatRequest, AIChatResponse
-from app.services.ai import run_agent
+from app.services.ai import run_agent, run_agent_streaming
 
 router = APIRouter()
 
@@ -19,6 +22,7 @@ async def chat(data: AIChatRequest):
     try:
         result = await run_agent(
             prompt=data.prompt,
+            image=data.image,
             history=[m.model_dump() for m in data.history],
             components=data.components,
             canvas_style=data.canvasStyle,
@@ -34,3 +38,48 @@ async def chat(data: AIChatRequest):
         return AIChatResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI 生成失败: {str(e)}")
+
+
+@router.post("/chat/stream")
+async def chat_stream(data: AIChatRequest):
+    """流式 AI 对话 — SSE 推送 Agent 执行进度
+
+    事件类型：
+      agent_start    → { stage: "discover" }
+      tool_call      → { step: 1, tool: "propose_options", args: {...} }
+      tool_result    → { step: 1, tool: "propose_options", status: "done", validation: {...} }
+      agent_done     → { reply, actions, ... }
+      agent_error    → { error: "..." }
+    """
+
+    async def event_generator():
+        try:
+            async for event in run_agent_streaming(
+                prompt=data.prompt,
+                image=data.image,
+                history=[m.model_dump() for m in data.history],
+                components=data.components,
+                canvas_style=data.canvasStyle,
+                canvas_width=data.canvasWidth,
+                canvas_height=data.canvasHeight,
+                selected_component_ids=data.selectedComponentIds,
+                viewport=data.viewport,
+                project_knowledge=data.projectKnowledge,
+                conversation_stage=data.conversationStage,
+                thread_id=data.threadId,
+            ):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'agent_error', 'error': str(e)}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )

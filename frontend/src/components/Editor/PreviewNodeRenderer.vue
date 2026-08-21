@@ -15,10 +15,10 @@
             :request="node.request"
             :linkage="node.linkage"
         >
-            <!-- 递归渲染子组件（通过 parentId 关联） -->
-            <template v-if="children.length">
+            <!-- 子组件按插槽区域分发（header / default / footer） -->
+            <template v-for="(group, slotName) in slotGroups" :key="slotName" #[slotName]>
                 <PreviewNodeRenderer
-                    v-for="child in children"
+                    v-for="child in group"
                     :key="child.id"
                     :node="child"
                 />
@@ -49,6 +49,16 @@ const componentRef = ref<{ $el?: HTMLElement } | HTMLElement | null>(null)
 // 查找当前组件的所有子组件
 const children = computed(() => {
     return store.componentData.filter(c => c.parentId === props.node.id)
+})
+
+// 子组件按 slot 字段分组，分发到容器的对应插槽区域
+const slotGroups = computed<Record<string, ComponentData[]>>(() => {
+    const groups: Record<string, ComponentData[]> = {}
+    for (const child of children.value) {
+        const name = child.slot || 'default'
+        ;(groups[name] ??= []).push(child)
+    }
+    return groups
 })
 
 onMounted(() => {

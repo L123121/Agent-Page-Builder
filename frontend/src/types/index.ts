@@ -82,8 +82,16 @@ export interface ChartPropValue {
   option: Record<string, unknown>
 }
 
+// ==================== 布局容器属性 ====================
+export interface LayoutContainerPropValue {
+  /** 顶部 header 区域高度（px） */
+  headerHeight: number
+  /** 底部 footer 区域高度（px） */
+  footerHeight: number
+}
+
 // ==================== 组件数据 ====================
-export type PropValue = string | PicturePropValue | TablePropValue | ChartPropValue | ComponentData[]
+export type PropValue = string | PicturePropValue | TablePropValue | ChartPropValue | LayoutContainerPropValue | ComponentData[]
 
 export interface ComponentData {
   id: string

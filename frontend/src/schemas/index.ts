@@ -87,6 +87,12 @@ export const ChartPropValueSchema = z.object({
     option: z.record(z.string(), z.unknown()).default(() => ({})),
 })
 
+// ==================== 布局容器属性 Schema ====================
+export const LayoutContainerPropValueSchema = z.object({
+    headerHeight: z.number().default(48),
+    footerHeight: z.number().default(48),
+})
+
 // ==================== 组件数据 Schema（递归定义）====================
 export const ComponentDataSchema: z.ZodType<ComponentData> = z.lazy(() =>
     z.object({
@@ -100,6 +106,7 @@ export const ComponentDataSchema: z.ZodType<ComponentData> = z.lazy(() =>
                 PicturePropValueSchema,
                 TablePropValueSchema,
                 ChartPropValueSchema,
+                LayoutContainerPropValueSchema,
                 z.array(ComponentDataSchema),
             ])
             .default(''),

@@ -6,6 +6,7 @@ import generateID from '@/utils/generateID'
 import componentList from '@/custom-component/component-list'
 import { changeComponentSizeWithScale } from '@/utils/changeComponentsSizeWithScale'
 import { isContainer } from '@/custom-component/registry'
+import { isLayoutContainer, resolveDropSlot, getSlotRegionOffsetTop } from '@/utils/slotRegion'
 import type { ComponentData } from '@/types'
 import { addComponentWithCommand } from '@/composables/useCommandActions'
 
@@ -58,11 +59,19 @@ export function useDragDrop(): {
             const container = findContainerAt(dropX, dropY)
 
             if (container) {
-                // 拖入容器：坐标相对于容器，设置 parentId
-                component.style.top = dropY - (container.style.top ?? 0)
-                component.style.left = dropX - (container.style.left ?? 0)
+                // 拖入容器：坐标相对于容器（多插槽容器再相对具体区域），设置 parentId + slot
                 component.parentId = container.id
-                ElMessage.success(`已放入 ${container.label} 容器`)
+                component.style.left = dropX - (container.style.left ?? 0)
+                if (isLayoutContainer(container)) {
+                    const slot = resolveDropSlot(container, dropX, dropY)
+                    component.slot = slot
+                    component.style.top =
+                        dropY - (container.style.top ?? 0) - getSlotRegionOffsetTop(container, slot)
+                    ElMessage.success(`已放入 ${container.label} 的 ${slot} 区域`)
+                } else {
+                    component.style.top = dropY - (container.style.top ?? 0)
+                    ElMessage.success(`已放入 ${container.label} 容器`)
+                }
             } else {
                 // 拖入画布空白区域：根级组件
                 component.style.top = dropY

@@ -20,6 +20,8 @@ export interface ComponentMetaData {
   icon: string
   /** 是否可包含子组件（容器组件设为 true） */
   acceptChildren?: boolean
+  /** 容器可用的插槽区域列表（如 ['header', 'default', 'footer']），未声明时仅默认插槽 */
+  slots?: string[]
   /** 是否内部组件（设为 true 时不显示在组件面板） */
   internal?: boolean
   /** 默认样式 */

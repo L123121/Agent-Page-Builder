@@ -123,6 +123,24 @@ const list: ComponentTemplate[] = [
         },
     },
     {
+        component: 'LayoutContainer',
+        label: '布局容器',
+        propValue: {
+            headerHeight: 48,
+            footerHeight: 48,
+        },
+        icon: 'juxing',
+        style: {
+            width: 375,
+            height: 240,
+            backgroundColor: '',
+            borderColor: '#dcdfe6',
+            borderWidth: 1,
+            borderStyle: 'solid',
+            borderRadius: '',
+        },
+    },
+    {
         component: 'LineShape',
         label: '直线',
         propValue: '',

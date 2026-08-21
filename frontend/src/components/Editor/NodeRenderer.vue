@@ -19,10 +19,10 @@
             :request="node.request"
             :linkage="node.linkage"
         >
-            <!-- 子组件通过插槽注入 -->
-            <template v-if="children.length">
+            <!-- 子组件按插槽区域分发（header / default / footer） -->
+            <template v-for="(group, slotName) in slotGroups" :key="slotName" #[slotName]>
                 <NodeRenderer
-                    v-for="child in children"
+                    v-for="child in group"
                     :key="child.id"
                     :node="child"
                     :index="getIndex(child.id)"
@@ -42,10 +42,10 @@
             :request="node.request"
             :linkage="node.linkage"
         >
-            <!-- 子组件通过插槽注入 -->
-            <template v-if="children.length">
+            <!-- 子组件按插槽区域分发（header / default / footer） -->
+            <template v-for="(group, slotName) in slotGroups" :key="slotName" #[slotName]>
                 <NodeRenderer
-                    v-for="child in children"
+                    v-for="child in group"
                     :key="child.id"
                     :node="child"
                     :index="getIndex(child.id)"
@@ -98,6 +98,19 @@ const svgFilterAttrs: (keyof ComponentStyle)[] = ['width', 'height', 'top', 'lef
  */
 const children = computed<ComponentData[]>(() => {
     return store.childrenIndex.get(props.node.id) ?? []
+})
+
+/**
+ * 子组件按 slot 字段分组，分发到容器的对应插槽区域
+ * （未声明插槽的容器子组件统一归入 default 插槽，与旧行为一致）
+ */
+const slotGroups = computed<Record<string, ComponentData[]>>(() => {
+    const groups: Record<string, ComponentData[]> = {}
+    for (const child of children.value) {
+        const name = child.slot || 'default'
+        ;(groups[name] ??= []).push(child)
+    }
+    return groups
 })
 
 /**

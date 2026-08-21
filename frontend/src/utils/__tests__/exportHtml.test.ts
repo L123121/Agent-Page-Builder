@@ -109,4 +109,44 @@ describe('exportToHtml - HTML 导出引擎', () => {
         })
         expect(html).toContain('background: #1a1a2e')
     })
+
+    it('LayoutContainer 按 slot 分发子组件到 header/default/footer 三区域', () => {
+        const container = makeComponent({
+            id: 'layout-1',
+            component: 'LayoutContainer',
+            label: '布局容器',
+            propValue: { headerHeight: 60, footerHeight: 40 },
+            style: { width: 375, height: 240, top: 10, left: 10, rotate: 0 },
+        })
+        const headerChild = makeComponent({
+            id: 'c1', component: 'VText', parentId: 'layout-1', slot: 'header',
+            propValue: '页头', style: { width: 100, height: 30, top: 10, left: 10, rotate: 0 },
+        })
+        const bodyChild = makeComponent({
+            id: 'c2', component: 'VText', parentId: 'layout-1', slot: 'default',
+            propValue: '正文', style: { width: 200, height: 50, top: 20, left: 20, rotate: 0 },
+        })
+        const footerChild = makeComponent({
+            id: 'c3', component: 'VText', parentId: 'layout-1', slot: 'footer',
+            propValue: '页脚', style: { width: 100, height: 30, top: 5, left: 5, rotate: 0 },
+        })
+        const html = exportToHtml({
+            title: '',
+            componentData: [container, headerChild, bodyChild, footerChild],
+            canvasStyle,
+        })
+
+        // 容器按 flex 纵向布局，区域高度来自 propValue
+        expect(html).toContain('flex-direction:column')
+        expect(html).toContain('height:60px')
+        expect(html).toContain('height:40px')
+
+        // 子组件按 slot 分组：页头 → header 区域、正文 → default 区域、页脚 → footer 区域（顺序即区域顺序）
+        const headerIdx = html.indexOf('页头')
+        const bodyIdx = html.indexOf('正文')
+        const footerIdx = html.indexOf('页脚')
+        expect(headerIdx).toBeGreaterThan(-1)
+        expect(bodyIdx).toBeGreaterThan(headerIdx)
+        expect(footerIdx).toBeGreaterThan(bodyIdx)
+    })
 })

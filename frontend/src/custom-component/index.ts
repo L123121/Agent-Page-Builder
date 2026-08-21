@@ -11,6 +11,13 @@ import { registerComponent, getRegisteredTypes, getComponent, getAttrComponent }
 import type { PropConfig } from './registry'
 import componentList from './component-list'
 
+/**
+ * 容器组件的插槽区域声明（未声明的容器仅有默认插槽）
+ */
+const containerSlots: Record<string, string[]> = {
+    LayoutContainer: ['header', 'default', 'footer'],
+}
+
 // ==================== 各组件属性面板配置（元数据驱动） ====================
 
 const componentPropConfigs: Record<string, PropConfig[]> = {
@@ -52,6 +59,14 @@ const componentPropConfigs: Record<string, PropConfig[]> = {
             { label: '点线', value: 'dotted' },
         ] },
     ],
+    LayoutContainer: [
+        { key: 'propValue.headerHeight', label: '顶部区域高度', type: 'number', min: 20, max: 300 },
+        { key: 'propValue.footerHeight', label: '底部区域高度', type: 'number', min: 20, max: 300 },
+        { key: 'style.backgroundColor', label: '背景颜色', type: 'color' },
+        { key: 'style.borderColor', label: '边框颜色', type: 'color' },
+        { key: 'style.borderWidth', label: '边框宽度', type: 'number', min: 0, max: 20 },
+        { key: 'style.borderRadius', label: '圆角', type: 'number', min: 0, max: 100 },
+    ],
     CircleShape: [
         { key: 'propValue', label: '显示文字', type: 'textarea', rows: 2 },
         { key: 'style.backgroundColor', label: '填充颜色', type: 'color' },
@@ -92,7 +107,9 @@ export default function install(app: App): void {
                 type,
                 label: item.label,
                 icon: item.icon,
-                acceptChildren: type === 'RectShape',
+                acceptChildren: type === 'RectShape' || type === 'LayoutContainer',
+                // 容器插槽区域声明（未声明则仅默认插槽）
+                ...(containerSlots[type] ? { slots: containerSlots[type] } : {}),
                 defaultStyle: item.style,
                 defaultPropValue: item.propValue,
                 // 传递属性面板元数据。不传则回退到 Attr.vue

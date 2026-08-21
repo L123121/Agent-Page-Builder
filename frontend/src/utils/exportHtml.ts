@@ -333,6 +333,39 @@ function renderChildren(ctx: RenderContext): string {
     return children.map(child => renderComponent({ component: child, allComponents })).join('\n')
 }
 
+/**
+ * 渲染布局容器组件（LayoutContainer）
+ * 容器内按 slot 字段分发到 header / default / footer 三个区域：
+ * 子组件坐标在编辑器中已换算为相对所属区域，导出时放到 position:relative 的区域即可对齐。
+ */
+function renderLayoutContainer(ctx: RenderContext): string {
+    const { component, allComponents } = ctx
+    const pv = component.propValue as { headerHeight?: number; footerHeight?: number } | null | undefined
+    const headerHeight = pv?.headerHeight ?? 48
+    const footerHeight = pv?.footerHeight ?? 48
+    const baseStyle = styleToInline(component.style)
+    const style = `position:absolute; display:flex; flex-direction:column; overflow:hidden; ${baseStyle}`
+    const animAttr = getAnimationAttributes(component.animations)
+
+    // 子组件按 slot 字段分组
+    const children = allComponents.filter(c => c.parentId === component.id)
+    const slotGroups: Record<string, ComponentData[]> = {}
+    for (const child of children) {
+        const name = child.slot || 'default'
+        ;(slotGroups[name] ??= []).push(child)
+    }
+    const renderSlot = (slot: string): string =>
+        (slotGroups[slot] ?? [])
+            .map(child => renderComponent({ component: child, allComponents }))
+            .join('\n')
+
+    const headerHtml = `<div style="position:relative; flex-shrink:0; height:${headerHeight}px; background:rgba(64,158,255,0.06);">${renderSlot('header')}</div>`
+    const defaultHtml = `<div style="position:relative; flex:1; min-height:0;">${renderSlot('default')}</div>`
+    const footerHtml = `<div style="position:relative; flex-shrink:0; height:${footerHeight}px; background:rgba(64,158,255,0.06);">${renderSlot('footer')}</div>`
+
+    return `<div ${animAttr} style="${style}">${headerHtml}${defaultHtml}${footerHtml}</div>`
+}
+
 // ==================== 渲染分发 ====================
 
 const RENDERERS: Record<string, (ctx: RenderContext) => string> = {
@@ -340,6 +373,7 @@ const RENDERERS: Record<string, (ctx: RenderContext) => string> = {
     VButton: renderVButton,
     Picture: renderPicture,
     RectShape: renderRectShape,
+    LayoutContainer: renderLayoutContainer,
     CircleShape: renderCircleShape,
     LineShape: renderLineShape,
     SVGStar: renderSVGStar,

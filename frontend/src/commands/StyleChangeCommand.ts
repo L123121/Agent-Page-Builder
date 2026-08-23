@@ -15,16 +15,6 @@ export interface StyleChangeData {
     newValue: unknown
 }
 
-/** 按路径读取嵌套值 */
-function getNested(obj: Record<string, unknown>, path: string): unknown {
-    return path.split('.').reduce<unknown>((acc, k) => {
-        if (acc && typeof acc === 'object') {
-            return (acc as Record<string, unknown>)[k]
-        }
-        return undefined
-    }, obj)
-}
-
 /** 按路径写入嵌套值（原地修改） */
 function setNested(obj: Record<string, unknown>, path: string, value: unknown): void {
     const keys = path.split('.')

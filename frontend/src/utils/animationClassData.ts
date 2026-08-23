@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 /**
  * 动画配置项接口
  */

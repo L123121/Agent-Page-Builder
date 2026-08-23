@@ -36,9 +36,15 @@
         <!-- 空画布引导 -->
         <div v-if="componentData.length === 0" class="empty-guide">
             <div class="empty-guide-content">
-                <div class="empty-guide-icon">🎨</div>
-                <p class="empty-guide-title">画布为空</p>
-                <p class="empty-guide-text">从左侧拖拽组件到画布，或点击工具栏的 <strong>AI 生成</strong> 开始设计</p>
+                <div class="empty-guide-icon">
+                    🎨
+                </div>
+                <p class="empty-guide-title">
+                    画布为空
+                </p>
+                <p class="empty-guide-text">
+                    从左侧拖拽组件到画布，或点击工具栏的 <strong>AI 生成</strong> 开始设计
+                </p>
             </div>
         </div>
     </div>

@@ -27,6 +27,26 @@ export interface PagePayload {
     canvasStyle?: CanvasStyleData
 }
 
+export interface PageVersionSummary {
+    _id: string
+    pageId: string
+    name: string
+    description: string
+    createdAt: string
+}
+
+export interface PageVersionInfo extends PageVersionSummary {
+    componentData: ComponentData[]
+    canvasStyle: CanvasStyleData
+}
+
+export interface PageVersionPayload {
+    name: string
+    description?: string
+    componentData?: ComponentData[]
+    canvasStyle?: CanvasStyleData
+}
+
 export function getErrorMessage(error: unknown, fallback = '请求失败'): string {
     if (error instanceof Error) return error.message
     if (typeof error === 'string') return error
@@ -70,6 +90,18 @@ export const pagesApi = {
     },
     unshare(id: string) {
         return api.delete(`/api/pages/${id}/share`) as Promise<{ message: string }>
+    },
+    listVersions(pageId: string) {
+        return api.get(`/api/pages/${pageId}/versions`) as Promise<{ versions: PageVersionSummary[] }>
+    },
+    createVersion(pageId: string, data: PageVersionPayload) {
+        return api.post(`/api/pages/${pageId}/versions`, data) as Promise<{ version: PageVersionInfo }>
+    },
+    getVersion(pageId: string, versionId: string) {
+        return api.get(`/api/pages/${pageId}/versions/${versionId}`) as Promise<{ version: PageVersionInfo }>
+    },
+    deleteVersion(pageId: string, versionId: string) {
+        return api.delete(`/api/pages/${pageId}/versions/${versionId}`) as Promise<{ message: string }>
     },
 }
 

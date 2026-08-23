@@ -30,3 +30,30 @@ jobs:
         # mock 模式使用脚本化 LLM，无需 API key，确定性回归 Agent 逻辑；
         # --require-pass-rate 100 使通过率不达标时退出码非 0，CI 判定失败
         run: python -m eval.runner --mode mock --require-pass-rate 100
+
+  frontend:
+    name: Frontend type-check + lint + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint:check
+
+      - name: Run tests
+        run: npm run test:run

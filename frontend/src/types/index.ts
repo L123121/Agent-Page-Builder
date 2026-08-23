@@ -267,7 +267,8 @@ export interface PageVersion {
   id: string
   name: string              // 版本名称
   description: string       // 版本描述
-  snapshot: ComponentData[] // 页面快照
+  /** 页面快照（后端版本列表不携带，恢复时按需拉取） */
+  snapshot?: ComponentData[]
   createdAt: string         // 创建时间
   thumbnail?: string        // 缩略图（base64）
 }

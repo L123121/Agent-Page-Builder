@@ -160,6 +160,8 @@ export async function chatWithAIStream(
     let buffer = ''
     let finalResult: AIChatResponse | null = null
 
+    // SSE 读取循环：没有固定次数，读到 done 为止
+    // eslint-disable-next-line no-constant-condition
     while (true) {
         const { done, value } = await reader.read()
         if (done) break

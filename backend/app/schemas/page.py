@@ -35,3 +35,28 @@ class PageSummary(BaseModel):
 class ShareResponse(BaseModel):
     shareToken: str
     shareUrl: str
+
+
+class VersionPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str = ""
+    componentData: list | None = None
+    canvasStyle: dict | None = None
+
+
+class VersionInfo(BaseModel):
+    _id: str
+    pageId: str
+    name: str
+    description: str = ""
+    componentData: list
+    canvasStyle: dict
+    createdAt: str | None = None
+
+
+class VersionSummary(BaseModel):
+    _id: str
+    pageId: str
+    name: str
+    description: str = ""
+    createdAt: str | None = None

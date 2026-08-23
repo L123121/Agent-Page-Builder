@@ -27,6 +27,8 @@ cp .env.example .env
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+> 注意：当前为本地工具模式，页面 CRUD 与分享接口无认证，请勿将 8000 端口直接暴露到公网。
+
 ## 功能一览
 
 | 功能 | 说明 |

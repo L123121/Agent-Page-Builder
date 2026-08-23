@@ -18,18 +18,18 @@ export interface LayoutSlotHeights {
  * 读取布局容器的区域高度配置（带缺省值兜底）
  */
 export function getLayoutSlotHeights(container: ComponentData): LayoutSlotHeights {
-  const pv = container.propValue as Partial<LayoutContainerPropValue> | null | undefined
-  return {
-    headerHeight: pv?.headerHeight ?? DEFAULT_SLOT_HEIGHT,
-    footerHeight: pv?.footerHeight ?? DEFAULT_SLOT_HEIGHT,
-  }
+    const pv = container.propValue as Partial<LayoutContainerPropValue> | null | undefined
+    return {
+        headerHeight: pv?.headerHeight ?? DEFAULT_SLOT_HEIGHT,
+        footerHeight: pv?.footerHeight ?? DEFAULT_SLOT_HEIGHT,
+    }
 }
 
 /**
  * 判断组件是否为多插槽布局容器
  */
 export function isLayoutContainer(component: ComponentData): boolean {
-  return component.component === LAYOUT_CONTAINER_TYPE
+    return component.component === LAYOUT_CONTAINER_TYPE
 }
 
 /**
@@ -40,13 +40,13 @@ export function isLayoutContainer(component: ComponentData): boolean {
  *   default = 中间剩余区域
  */
 export function resolveDropSlot(container: ComponentData, dropX: number, dropY: number): string {
-  if (!isLayoutContainer(container)) return LAYOUT_SLOT_DEFAULT
-  const { headerHeight, footerHeight } = getLayoutSlotHeights(container)
-  const relY = dropY - (container.style.top ?? 0)
-  const height = container.style.height ?? 0
-  if (relY < headerHeight) return LAYOUT_SLOT_HEADER
-  if (relY >= height - footerHeight) return LAYOUT_SLOT_FOOTER
-  return LAYOUT_SLOT_DEFAULT
+    if (!isLayoutContainer(container)) return LAYOUT_SLOT_DEFAULT
+    const { headerHeight, footerHeight } = getLayoutSlotHeights(container)
+    const relY = dropY - (container.style.top ?? 0)
+    const height = container.style.height ?? 0
+    if (relY < headerHeight) return LAYOUT_SLOT_HEADER
+    if (relY >= height - footerHeight) return LAYOUT_SLOT_FOOTER
+    return LAYOUT_SLOT_DEFAULT
 }
 
 /**
@@ -54,10 +54,10 @@ export function resolveDropSlot(container: ComponentData, dropX: number, dropY: 
  * 用于把落点的容器相对坐标换算为区域相对坐标（子组件 top/left 以区域为基准）。
  */
 export function getSlotRegionOffsetTop(container: ComponentData, slot: string): number {
-  if (!isLayoutContainer(container) || slot === LAYOUT_SLOT_HEADER) return 0
-  const { headerHeight, footerHeight } = getLayoutSlotHeights(container)
-  if (slot === LAYOUT_SLOT_FOOTER) {
-    return Math.max((container.style.height ?? 0) - footerHeight, headerHeight)
-  }
-  return headerHeight
+    if (!isLayoutContainer(container) || slot === LAYOUT_SLOT_HEADER) return 0
+    const { headerHeight, footerHeight } = getLayoutSlotHeights(container)
+    if (slot === LAYOUT_SLOT_FOOTER) {
+        return Math.max((container.style.height ?? 0) - footerHeight, headerHeight)
+    }
+    return headerHeight
 }

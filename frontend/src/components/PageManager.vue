@@ -3,7 +3,12 @@
         <div class="page-manager">
             <div class="header">
                 <h3>页面管理</h3>
-                <el-button type="primary" size="small" :loading="isSaving" @click="handleCreate">
+                <el-button
+                    type="primary"
+                    size="small"
+                    :loading="isSaving"
+                    @click="handleCreate"
+                >
                     新建页面
                 </el-button>
             </div>

@@ -148,7 +148,7 @@ export const PageVersionSchema = z.object({
     id: z.string(),
     name: z.string(),
     description: z.string().default(''),
-    snapshot: z.array(ComponentDataSchema),
+    snapshot: z.array(ComponentDataSchema).optional(),
     createdAt: z.string(),
     thumbnail: z.string().optional(),
 })

@@ -89,7 +89,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const store = useStore()
-const { componentData, curComponent, canvasStyleData } = storeToRefs(store)
+const { curComponent, canvasStyleData } = storeToRefs(store)
 const svgFilterAttrs: (keyof ComponentStyle)[] = ['width', 'height', 'top', 'left', 'rotate']
 
 /**

@@ -1,11 +1,16 @@
 """Page ORM 模型"""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, Column, DateTime, JSON, String, Text
 
 from app.database import Base
 from app.utils.id_generator import generate_id
+
+
+def utcnow() -> datetime:
+    """当前 UTC 时间（naive），兼容 SQLite 存储；替代已弃用的 datetime.utcnow"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Page(Base):
@@ -19,8 +24,8 @@ class Page(Base):
     canvas_style = Column(JSON, default=dict)
     share_token = Column(String, nullable=True, index=True)
     is_public = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     # 默认画布样式
     DEFAULT_CANVAS_STYLE = {

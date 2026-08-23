@@ -3,7 +3,12 @@
         <div class="ai-panel-header">
             <span class="ai-panel-title">AI 助手</span>
             <div class="ai-panel-actions">
-                <el-button v-if="messages.length" text size="small" @click="clearChat">
+                <el-button
+                    v-if="messages.length"
+                    text
+                    size="small"
+                    @click="clearChat"
+                >
                     清空对话
                 </el-button>
                 <el-button text :icon="Close" @click="$emit('update:modelValue', false)" />
@@ -13,8 +18,12 @@
         <div ref="chatBodyRef" class="ai-panel-body">
             <!-- 空状态提示 -->
             <div v-if="!messages.length" class="ai-empty">
-                <p class="ai-empty-title">描述你想要的页面，AI 帮你生成</p>
-                <p class="ai-empty-sub">一步步引导你完成设计，生成后可以自由修改</p>
+                <p class="ai-empty-title">
+                    描述你想要的页面，AI 帮你生成
+                </p>
+                <p class="ai-empty-sub">
+                    一步步引导你完成设计，生成后可以自由修改
+                </p>
                 <div class="ai-examples">
                     <el-tag
                         v-for="ex in examples"
@@ -42,8 +51,8 @@
                 >
                     <span class="step-icon">
                         {{ step.status === 'done' ? '✅' :
-                           step.status === 'error' ? '❌' :
-                           step.status === 'running' ? '⏳' : '⏸' }}
+                            step.status === 'error' ? '❌' :
+                            step.status === 'running' ? '⏳' : '⏸' }}
                     </span>
                     <span class="step-tool">{{ toolLabels[step.tool] || step.tool }}</span>
                     <span v-if="step.autoFixes?.length" class="step-fixes">
@@ -56,13 +65,20 @@
             </div>
 
             <!-- 对话消息 -->
-            <div v-for="(msg, i) in messages" :key="i" class="ai-msg" :class="msg.role">
+            <div
+                v-for="(msg, i) in messages"
+                :key="i"
+                class="ai-msg"
+                :class="msg.role"
+            >
                 <div class="ai-msg-bubble">
                     <span v-if="msg.role === 'assistant' && msg.loading" class="ai-typing">
                         <span /><span /><span />
                         <span class="ai-typing-text">{{ loadingText }}</span>
                     </span>
-                    <template v-else>{{ msg.content }}</template>
+                    <template v-else>
+                        {{ msg.content }}
+                    </template>
                 </div>
                 <!-- 快捷回复建议（ask_question 附带） -->
                 <div v-if="msg.suggestions?.length && !msg.optionSelected" class="ai-suggestions">
@@ -87,18 +103,29 @@
                     >
                         <div class="ai-option-header">
                             <span class="ai-option-title">{{ opt.title }}</span>
-                            <el-tag v-if="opt.tag" size="small" type="warning" effect="plain">
+                            <el-tag
+                                v-if="opt.tag"
+                                size="small"
+                                type="warning"
+                                effect="plain"
+                            >
                                 {{ opt.tag }}
                             </el-tag>
                         </div>
-                        <p class="ai-option-desc">{{ opt.description }}</p>
+                        <p class="ai-option-desc">
+                            {{ opt.description }}
+                        </p>
                     </div>
                 </div>
                 <!-- 方案确认卡片（confirm_plan） -->
                 <div v-if="msg.plan" class="ai-plan" :class="{ disabled: msg.planResolved }">
-                    <p class="ai-plan-summary">{{ msg.plan.summary }}</p>
+                    <p class="ai-plan-summary">
+                        {{ msg.plan.summary }}
+                    </p>
                     <ul class="ai-plan-details">
-                        <li v-for="(d, j) in msg.plan.details" :key="j">{{ d }}</li>
+                        <li v-for="(d, j) in msg.plan.details" :key="j">
+                            {{ d }}
+                        </li>
                     </ul>
                     <div v-if="!msg.planResolved" class="ai-plan-actions">
                         <el-button type="primary" size="small" @click="confirmPlan(msg)">
@@ -114,8 +141,10 @@
 
         <!-- 图片上传预览区 -->
         <div v-if="uploadedImage" class="ai-image-preview">
-            <img :src="uploadedImage" alt="参考图" />
-            <el-button text size="small" @click="removeImage">✕ 移除</el-button>
+            <img :src="uploadedImage" alt="参考图">
+            <el-button text size="small" @click="removeImage">
+                ✕ 移除
+            </el-button>
         </div>
         <!-- 工具栏 -->
         <div class="ai-panel-toolbar">
@@ -156,7 +185,7 @@
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { Close } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { chatWithAI, chatWithAIStream, type ChatMessage, type AIAction, type AIOption, type AIPlan, type AgentStage, type StreamEvent } from '@/api/ai'
+import { chatWithAIStream, type ChatMessage, type AIAction, type AIOption, type AIPlan, type AgentStage, type StreamEvent } from '@/api/ai'
 import { useStore } from '@/store'
 import {
     importDataWithCommand,
@@ -174,10 +203,6 @@ const inputText = ref('')
 const loading = ref(false)
 const loadingText = ref('AI 正在思考...')
 const chatBodyRef = ref<HTMLElement>()
-const AI_TIMEOUT = 90000 // 90 秒超时
-
-// 前端请求取消 token，用于超时真正中断 fetch
-let currentAbortController: AbortController | null = null
 
 interface DisplayMessage {
     role: 'user' | 'assistant'

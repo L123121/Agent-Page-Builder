@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.page import Page
-from app.schemas.page import PageInfo, PagePayload, PageSummary, ShareResponse
+from app.models.page_version import PageVersion
+from app.schemas.page import PagePayload, ShareResponse, VersionPayload
 
 router = APIRouter()
 
@@ -131,3 +132,68 @@ def unshare_page(
     page.is_public = False
     db.commit()
     return {"message": "已取消分享"}
+
+
+# ==================== 页面版本快照 ====================
+
+
+@router.get("/{page_id}/versions")
+def list_page_versions(page_id: str, db: Session = Depends(get_db)):
+    """获取页面版本列表（不含快照内容）"""
+    page = db.query(Page).filter(Page.id == page_id).first()
+    if not page:
+        raise HTTPException(status_code=404, detail="页面不存在")
+    versions = (
+        db.query(PageVersion)
+        .filter(PageVersion.page_id == page_id)
+        .order_by(PageVersion.created_at.desc())
+        .all()
+    )
+    return {"versions": [v.to_summary() for v in versions]}
+
+
+@router.post("/{page_id}/versions", status_code=status.HTTP_201_CREATED)
+def create_page_version(page_id: str, data: VersionPayload, db: Session = Depends(get_db)):
+    """保存页面版本快照（默认记录页面当前内容）"""
+    page = db.query(Page).filter(Page.id == page_id).first()
+    if not page:
+        raise HTTPException(status_code=404, detail="页面不存在")
+    version = PageVersion(
+        page_id=page_id,
+        name=data.name,
+        description=data.description or "",
+        component_data=data.componentData if data.componentData is not None else page.component_data or [],
+        canvas_style=data.canvasStyle if data.canvasStyle is not None else page.canvas_style or {},
+    )
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    return {"version": version.to_dict()}
+
+
+@router.get("/{page_id}/versions/{version_id}")
+def get_page_version(page_id: str, version_id: str, db: Session = Depends(get_db)):
+    """获取版本快照完整内容（恢复用）"""
+    version = (
+        db.query(PageVersion)
+        .filter(PageVersion.id == version_id, PageVersion.page_id == page_id)
+        .first()
+    )
+    if not version:
+        raise HTTPException(status_code=404, detail="版本不存在")
+    return {"version": version.to_dict()}
+
+
+@router.delete("/{page_id}/versions/{version_id}")
+def delete_page_version(page_id: str, version_id: str, db: Session = Depends(get_db)):
+    """删除版本"""
+    version = (
+        db.query(PageVersion)
+        .filter(PageVersion.id == version_id, PageVersion.page_id == page_id)
+        .first()
+    )
+    if not version:
+        raise HTTPException(status_code=404, detail="版本不存在")
+    db.delete(version)
+    db.commit()
+    return {"message": "版本已删除"}

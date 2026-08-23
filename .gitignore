@@ -20,6 +20,12 @@ backend/.env
 backend/*.db
 backend/*.sqlite
 
+# Agent 本地配置（Claude 等）
+.claude/
+
+# Eval 报告（每次运行生成的时间戳产物）
+backend/eval/reports/
+
 # IDE
 .idea/
 .vscode/

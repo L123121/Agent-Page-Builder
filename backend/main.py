@@ -1,5 +1,6 @@
 """低代码平台服务端 — FastAPI 入口"""
 
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException
@@ -29,7 +30,7 @@ app = FastAPI(
 origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins if origins else ["*"],
+    allow_origins=origins if origins else ["http://localhost:8080", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,7 +43,7 @@ app.include_router(ai.router, prefix="/api/ai")
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "timestamp": __import__("time").time()}
+    return {"status": "ok", "timestamp": time.time()}
 
 
 @app.get("/api/shared/{token}")

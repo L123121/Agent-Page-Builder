@@ -38,6 +38,7 @@ Write-Host "`n按任意键终止服务..." -ForegroundColor Yellow
 # 等待按键后终止进程
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 Write-Host "`n正在停止服务..." -ForegroundColor Red
-Stop-Process -Id $backendProcess.Id -Force -ErrorAction SilentlyContinue
-Stop-Process -Id $frontendProcess.Id -Force -ErrorAction SilentlyContinue
+# taskkill /T 连子进程树一起结束，避免 uvicorn --reload / vite 的孙进程残留
+& taskkill /PID $backendProcess.Id /T /F 2>$null
+& taskkill /PID $frontendProcess.Id /T /F 2>$null
 Write-Host "服务已停止" -ForegroundColor Green

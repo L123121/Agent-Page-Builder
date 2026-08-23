@@ -126,9 +126,19 @@
                 <el-divider direction="vertical" />
                 <div class="canvas-config">
                     <label>画布</label>
-                    <input v-model.number="canvasStyleData.width" type="number" class="canvas-input" @change="handleCanvasSizeChange">
+                    <input
+                        v-model.number="canvasStyleData.width"
+                        type="number"
+                        class="canvas-input"
+                        @change="handleCanvasSizeChange"
+                    >
                     <span class="separator">×</span>
-                    <input v-model.number="canvasStyleData.height" type="number" class="canvas-input" @change="handleCanvasSizeChange">
+                    <input
+                        v-model.number="canvasStyleData.height"
+                        type="number"
+                        class="canvas-input"
+                        @change="handleCanvasSizeChange"
+                    >
                 </div>
                 <div class="canvas-config">
                     <label>比例</label>

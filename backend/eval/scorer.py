@@ -61,9 +61,11 @@ def _tool_step_count(steps: List[dict]) -> int:
 
 
 def _self_corrected(trace: List[dict]) -> bool:
-    """是否发生过自省修正：trace 中出现 tool_not_allowed 反馈后继续执行"""
+    """是否发生过自省修正：trace 中存在 correction 轮次
+    （工具被拒 / 组件引用无法解析 / 动作未产生画布差异后继续执行）。"""
     return any(
-        step.get("error") == "tool_not_allowed"
+        step.get("type") == "correction"
+        or step.get("error") == "tool_not_allowed"
         or "tool_not_allowed" in str(step)
         for step in trace or []
     )

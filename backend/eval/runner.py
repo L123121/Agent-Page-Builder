@@ -76,52 +76,226 @@ def _button(text: str) -> dict:
     }
 
 
+# 生成类任务：任务 id → 满足期望标准的组件脚本（确定性回归用）
+_MOCK_GENERATION_SCRIPTS: Dict[str, list] = {
+    "poster_dance_recruit": [
+        _text("街舞社招新", 32),
+        _text("时间：9月15日 地点：大学生活动中心", 16, fontWeight=400, top=140),
+        _button("立即报名"),
+    ],
+    "poster_activity_promo": [
+        _text("校园音乐节", 32),
+        _text("时间：周五晚 地点：操场", 16, fontWeight=400, top=140),
+        _text("等你来嗨", 14, fontWeight=400, top=220),
+    ],
+    "form_registration": [
+        _text("社团报名表", 28),
+        _text("姓名：____ 联系方式：____", 16, fontWeight=400, top=140),
+        _button("提交报名"),
+    ],
+    "poster_lecture": [
+        _text("人工智能前沿讲座", 32),
+        _text("主讲人：张教授 时间：10月12日 地点：图书馆报告厅", 16, fontWeight=400, top=140),
+    ],
+    "poster_job_fair": [
+        _text("秋季双选会", 32),
+        _text("时间：11月1日 地点：体育馆", 16, fontWeight=400, top=140),
+        _button("投递简历"),
+    ],
+    "poster_movie_night": [
+        _text("露天电影之夜", 32),
+        _text("本周五晚 19:00 操场草坪", 16, fontWeight=400, top=140),
+    ],
+    "poster_sports_meet": [
+        _text("校运动会", 32),
+        _text("时间：10月20-21日 地点：田径场", 16, fontWeight=400, top=140),
+        _button("报名参赛"),
+    ],
+    "form_questionnaire": [
+        _text("校园服务满意度问卷", 28),
+        _text("请留下你的真实反馈，帮助我们一起改进", 16, fontWeight=400, top=140),
+        _button("提交问卷"),
+    ],
+    "form_vote": [
+        _text("社团最佳节目投票", 28),
+        _text("每人限投一票，结果实时公示", 16, fontWeight=400, top=140),
+        _button("立即投票"),
+    ],
+    "page_club_intro": [
+        _text("动漫社团介绍", 32),
+        _text("我们是一个热爱二次元的大家庭", 16, fontWeight=400, top=140),
+        _text("每周六社团活动室见", 14, fontWeight=400, top=220),
+    ],
+    "page_lost_found": [
+        _text("失物招领", 28),
+        _text("拾到物品请交至学生会办公室", 16, fontWeight=400, top=140),
+    ],
+    "page_notice": [
+        _text("放假通知", 28),
+        _text("国庆节放假安排如下", 16, fontWeight=400, top=140),
+        _text("10月1日至10月7日", 14, fontWeight=400, top=220),
+    ],
+}
+
+
 def _mock_generate_components(task: EvalTask) -> list:
     """按任务 id 构造满足期望的 mock 生成结果（确定性回归用）"""
-    task_id = task.get("id", "")
-    if task_id == "poster_dance_recruit":
-        return [
-            _text("街舞社招新", 32),
-            _text("时间：9月15日 地点：大学生活动中心", 16, fontWeight=400, top=140),
-            _button("立即报名"),
-        ]
-    if task_id == "poster_activity_promo":
-        return [
-            _text("校园音乐节", 32),
-            _text("时间：周五晚 地点：操场", 16, fontWeight=400, top=140),
-            _text("等你来嗨", 14, fontWeight=400, top=220),
-        ]
-    if task_id == "form_registration":
-        return [
-            _text("社团报名表", 28),
-            _text("姓名：____ 联系方式：____", 16, fontWeight=400, top=140),
-            _button("提交报名"),
-        ]
-    return [_text("默认标题", 24)]
+    return _MOCK_GENERATION_SCRIPTS.get(task.get("id", ""), [_text("默认标题", 24)])
+
+
+# 单轮编辑类任务：任务 id → 一次 edit_page 调用脚本
+_MOCK_EDIT_SCRIPTS: Dict[str, MockResponse] = {
+    "edit_title_font": MockResponse(MockToolCall("edit_page", {
+        "reply": "已放大标题",
+        "operations": [{"type": "modify", "id": "title_1", "style": {"fontSize": 32}}],
+    })),
+    "edit_button_text": MockResponse(MockToolCall("edit_page", {
+        "reply": "已修改按钮文案",
+        "operations": [{"type": "modify", "id": "btn_1", "propValue": "立即参与"}],
+    })),
+    "edit_text_color": MockResponse(MockToolCall("edit_page", {
+        "reply": "已调整标题颜色",
+        "operations": [{"type": "modify", "id": "title_1", "style": {"color": "#0a58ce"}}],
+    })),
+    "edit_move_component": MockResponse(MockToolCall("edit_page", {
+        "reply": "已移动标题到底部",
+        "operations": [{"type": "move", "id": "title_1", "top": 500, "left": 37}],
+    })),
+    "edit_font_shrink": MockResponse(MockToolCall("edit_page", {
+        "reply": "已缩小正文标题",
+        "operations": [{"type": "modify", "id": "t1", "style": {"fontSize": 16}}],
+    })),
+    "edit_multi_component": MockResponse(MockToolCall("edit_page", {
+        "reply": "已放大标题并下移按钮",
+        "operations": [
+            {"type": "modify", "id": "title_1", "style": {"fontSize": 32}},
+            {"type": "move", "id": "btn_1", "top": 520, "left": 87},
+        ],
+    })),
+    "delete_component": MockResponse(MockToolCall("edit_page", {
+        "reply": "已删除图片",
+        "operations": [{"type": "delete", "id": "pic_1"}],
+    })),
+    "delete_button": MockResponse(MockToolCall("edit_page", {
+        "reply": "已删除按钮",
+        "operations": [{"type": "delete", "id": "btn_1"}],
+    })),
+    "delete_second_text": MockResponse(MockToolCall("edit_page", {
+        "reply": "已删除第二个文本",
+        "operations": [{"type": "delete", "id": "t2"}],
+    })),
+    "layout_center_focus": MockResponse(MockToolCall("edit_page", {
+        "reply": "已居中布局",
+        "operations": [
+            {"type": "move", "id": "t1", "top": 60, "left": 37},
+            {"type": "move", "id": "t2", "top": 140, "left": 37},
+        ],
+    })),
+    "layout_vertical_stack": MockResponse(MockToolCall("edit_page", {
+        "reply": "已改为纵向堆叠布局",
+        "operations": [
+            {"type": "move", "id": "t1", "top": 40, "left": 37},
+            {"type": "move", "id": "t2", "top": 140, "left": 37},
+            {"type": "move", "id": "t3", "top": 240, "left": 37},
+        ],
+    })),
+    # 对抗性：move 超出画布边界 → 验证器报错 → 自动修复（bounds clamp）闭环
+    "adv_out_of_bounds_repair": MockResponse(MockToolCall("edit_page", {
+        "reply": "把标题移到右下",
+        "operations": [{"type": "move", "id": "title_1", "top": 600, "left": 900}],
+    })),
+}
+
+
+# 多轮对抗性脚本：模拟「模型犯错 → 系统反馈 → 自省修正」的完整闭环。
+# 顺序注入 _invoke_llm（side_effect），响应耗尽即抛错——脚本必须精确覆盖
+# 任务的预期轮数，否则评测失败，这本身就是防劣化断言。
+_MOCK_MULTI_STEP_SCRIPTS: Dict[str, List[MockResponse]] = {
+    # 组件引用无法解析（「大标题」不是 id 也不是 label）→ 反馈有效 ID → 重试成功
+    "adv_unknown_ref_self_correct": [
+        MockResponse(MockToolCall("edit_page", {
+            "reply": "放大主标题",
+            "operations": [{"type": "modify", "id": "大标题", "style": {"fontSize": 32}}],
+        })),
+        MockResponse(MockToolCall("edit_page", {
+            "reply": "已放大标题",
+            "operations": [{"type": "modify", "id": "title_1", "style": {"fontSize": 32}}],
+        })),
+    ],
+    # edit 阶段首步误调 edit 前先被白名单拒绝（execute 阶段只允许 generate_page）→ 修正重试
+    "adv_rejected_tool_self_correct": [
+        MockResponse(MockToolCall("edit_page", {
+            "reply": "已放大标题",
+            "operations": [{"type": "modify", "id": "title_1", "style": {"fontSize": 32}}],
+        })),
+        MockResponse(MockToolCall("edit_page", {
+            "reply": "已放大标题",
+            "operations": [{"type": "modify", "id": "title_1", "style": {"fontSize": 32}}],
+        })),
+    ],
+    # 目标组件被锁定 → 动作被跳过、画布无差异 → 反馈后改改未锁定组件
+    "adv_locked_component_redirect": [
+        MockResponse(MockToolCall("edit_page", {
+            "reply": "修改标题",
+            "operations": [{"type": "modify", "id": "title_1", "propValue": "新标题"}],
+        })),
+        MockResponse(MockToolCall("edit_page", {
+            "reply": "标题已锁定，已修改副标题",
+            "operations": [{"type": "modify", "id": "subtitle_1", "propValue": "新副标题"}],
+        })),
+    ],
+    # 删除不存在的组件 → unresolvedRef 反馈 → 用真实 ID 重试
+    "adv_delete_missing_self_correct": [
+        MockResponse(MockToolCall("edit_page", {
+            "reply": "删除配图",
+            "operations": [{"type": "delete", "id": "pic_9"}],
+        })),
+        MockResponse(MockToolCall("edit_page", {
+            "reply": "已删除图片",
+            "operations": [{"type": "delete", "id": "pic_1"}],
+        })),
+    ],
+    # planner：discover 阶段误调 confirm_plan 被拒 → 两轮选择 → 方案确认 → 生成
+    "adv_planner_self_correct": [
+        MockResponse(MockToolCall("confirm_plan", {
+            "summary": "读书分享会方案", "details": ["大标题", "时间地点", "报名入口"],
+        })),
+        MockResponse(MockToolCall("propose_options", {
+            "reply": "请选择页面方向",
+            "options": [
+                {"id": "poster", "title": "宣传海报", "description": "主视觉 + 行动入口"},
+                {"id": "form", "title": "报名表", "description": "信息登记"},
+            ],
+        })),
+        MockResponse(MockToolCall("propose_options", {
+            "reply": "请选择视觉风格",
+            "options": [
+                {"id": "bright", "title": "明亮清新", "description": "浅色背景"},
+                {"id": "dark", "title": "深色质感", "description": "深色背景"},
+            ],
+        })),
+        MockResponse(MockToolCall("confirm_plan", {
+            "summary": "读书分享会宣传海报",
+            "details": ["活动标题", "时间地点", "报名入口"],
+        })),
+        MockResponse(MockToolCall("generate_page", {
+            "reply": "页面已生成",
+            "canvasStyle": {"width": 375, "height": 667, "backgroundColor": "#ffffff"},
+            "components": [
+                _text("读书分享会", 32),
+                _text("时间：9月20日 地点：多功能厅", 16, fontWeight=400, top=140),
+                _button("立即报名"),
+            ],
+        })),
+    ],
+}
 
 
 def _mock_response_for_task(task: EvalTask, state: dict) -> MockResponse:
-    """根据任务 id 构造 mock LLM 的 tool_call 响应"""
-    task_id = task.get("id", "")
-    if task_id == "edit_title_font":
-        return MockResponse(MockToolCall("edit_page", {
-            "reply": "已放大标题",
-            "operations": [{"type": "modify", "id": "title_1", "style": {"fontSize": 32}}],
-        }))
-    if task_id == "delete_component":
-        return MockResponse(MockToolCall("edit_page", {
-            "reply": "已删除图片",
-            "operations": [{"type": "delete", "id": "pic_1"}],
-        }))
-    if task_id == "layout_center_focus":
-        return MockResponse(MockToolCall("edit_page", {
-            "reply": "已居中布局",
-            "operations": [
-                {"type": "move", "id": "t1", "top": 60, "left": 37},
-                {"type": "move", "id": "t2", "top": 140, "left": 37},
-            ],
-        }))
-    if task_id == "empty_canvas_vague":
+    """根据任务 id 构造 mock LLM 的单轮 tool_call 响应"""
+    if task.get("id", "") in _MOCK_EDIT_SCRIPTS:
+        return _MOCK_EDIT_SCRIPTS[task["id"]]
+    if (task.get("expected") or {}).get("requireInitialChoice"):
         # 模糊需求：planner 应产出方向确认（propose_options），而非直接生成
         return MockResponse(MockToolCall("propose_options", {
             "reply": "请选择页面方向",
@@ -136,6 +310,14 @@ def _mock_response_for_task(task: EvalTask, state: dict) -> MockResponse:
         "canvasStyle": {"width": 375, "height": 667, "backgroundColor": "#ffffff"},
         "components": _mock_generate_components(task),
     }))
+
+
+def _mock_response_sequence(task: EvalTask, state: dict) -> List[MockResponse]:
+    """任务对应的 mock 响应序列：多轮脚本优先，否则包装为单元素序列"""
+    multi = _MOCK_MULTI_STEP_SCRIPTS.get(task.get("id", ""))
+    if multi:
+        return list(multi)
+    return [_mock_response_for_task(task, state)]
 
 
 def _build_state(task: EvalTask, stage: str = "execute") -> dict:
@@ -160,10 +342,13 @@ def _build_state(task: EvalTask, stage: str = "execute") -> dict:
 
 
 def _assemble_steps(trace: list) -> list:
-    """把节点 trace 转成 EvalRunResult.steps（供 MAX_STEPS 检查）"""
+    """把节点 trace 转成 EvalRunResult.steps（供 MAX_STEPS 检查）
+
+    correction 类型（自省修正轮次）不计入工具步数——它们是反馈轮而非工具执行。
+    """
     steps = []
     for step in trace or []:
-        if isinstance(step, dict) and step.get("tool"):
+        if isinstance(step, dict) and step.get("tool") and step.get("type") != "correction":
             steps.append({"type": "tool_call", "tool": step["tool"]})
     return steps
 
@@ -184,8 +369,8 @@ async def run_mock(task: EvalTask) -> EvalRunResult:
                 captured["payload"] = payload
                 return "我选择「宣传海报」"
 
-            with patch("app.services.ai.agent.interrupt", side_effect=fake_interrupt), \
-                 patch("app.services.ai.agent._invoke_llm", new=AsyncMock(return_value=_mock_response_for_task(task, state))):
+            with patch("app.services.ai.agent_nodes.interrupt", side_effect=fake_interrupt), \
+                 patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(side_effect=_mock_response_sequence(task, state))):
                 result = await planner_node(state)
 
             plan = result.get("plan")
@@ -211,12 +396,14 @@ async def run_mock(task: EvalTask) -> EvalRunResult:
                 "provider": "mock",
             }
 
-        # 执行类：走 executor，mock LLM 返回一个合法工具调用
-        state = _build_state(task, stage="execute")
+        # 执行类：走 executor，mock LLM 按脚本序列响应（支持多轮对抗性用例）。
+        # 画布非空默认 edit 阶段（与真实路由一致）；对抗性任务可用 mockStage 覆盖。
+        mock_stage = task.get("mockStage") or ("edit" if task.get("initialCanvas") else "execute")
+        state = _build_state(task, stage=mock_stage)
         state["allowed_tools"] = ["generate_page", "edit_page", "finish"]
         state["plan"] = {"summary": task.get("name", ""), "details": ["确定性 mock 回归"]}
 
-        with patch("app.services.ai.agent._invoke_llm", new=AsyncMock(return_value=_mock_response_for_task(task, state))):
+        with patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(side_effect=_mock_response_sequence(task, state))):
             result = await executor_node(state)
 
         payload = result.get("result", {})

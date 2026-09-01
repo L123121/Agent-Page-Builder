@@ -191,7 +191,7 @@ class AgentLoopTests(unittest.IsolatedAsyncioTestCase):
                 "operations": [{"type": "modify", "id": "title", "propValue": "新标题"}],
             })),
         ]
-        with patch("app.services.ai.agent._invoke_llm", new=AsyncMock(side_effect=responses)):
+        with patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(side_effect=responses)):
             result = await executor_node(state)
         payload = result["result"]
         self.assertTrue(payload["validation"]["valid"])
@@ -230,8 +230,8 @@ class AgentSelfCorrectionTests(unittest.IsolatedAsyncioTestCase):
                 "options": [{"id": "poster", "title": "海报", "description": "x"}],
             })),
         ]
-        with patch("app.services.ai.agent._invoke_llm", new=AsyncMock(side_effect=responses)), \
-             patch("app.services.ai.agent.interrupt", return_value="我选择「海报」") as mock_interrupt:
+        with patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(side_effect=responses)), \
+             patch("app.services.ai.agent_nodes.interrupt", return_value="我选择「海报」") as mock_interrupt:
             result = await planner_node(state)
         # 第一轮 confirm_plan 被拒，第二轮 propose_options 触发 interrupt 挂起
         self.assertTrue(mock_interrupt.called)
@@ -247,8 +247,8 @@ class AgentSelfCorrectionTests(unittest.IsolatedAsyncioTestCase):
                 "details": ["大标题", "动感配色", "报名入口"],
             })),
         ]
-        with patch("app.services.ai.agent._invoke_llm", new=AsyncMock(return_value=responses[0])), \
-             patch("app.services.ai.agent.interrupt", return_value="确认，请生成"):
+        with patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(return_value=responses[0])), \
+             patch("app.services.ai.agent_nodes.interrupt", return_value="确认，请生成"):
             result = await planner_node(state)
         self.assertEqual(result["plan"]["summary"], "深色潮流海报")
         self.assertEqual(len(result["plan"]["details"]), 3)
@@ -270,7 +270,7 @@ class AgentSelfCorrectionTests(unittest.IsolatedAsyncioTestCase):
                 }],
             })),
         ]
-        with patch("app.services.ai.agent._invoke_llm", new=AsyncMock(return_value=responses[0])) as mock_llm:
+        with patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(return_value=responses[0])) as mock_llm:
             result = await executor_node(state)
         payload = result["result"]
         self.assertTrue(payload["validation"]["valid"])

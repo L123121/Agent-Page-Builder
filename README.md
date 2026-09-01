@@ -114,8 +114,19 @@ POST /api/auth/refresh    # 刷新（轮换双 token）
   - **mock 模式**：脚本化 LLM（支持多轮响应脚本，精确回归「犯错→反馈→修正」闭环），不消耗 Token，秒级回归（CI 使用，`--require-pass-rate 100` 门禁）
   - **live 模式**：真实 LLM 全链路，自动模拟多轮交互（选项→确认→生成），量化真实质量（含 judge 分）
 - **summary.py** — 聚合最新 mock/live 报告为 Markdown 表格（`python -m eval.summary --write`），保证文档与报告一致
+- **golden_suggest.py** — 扫描 agent_runs 运行日志，导出「失败/自省修正 case」为 golden 候选（`python -m eval.golden_suggest --write`），形成线上失败 → 回归用例的飞轮
 - **judge_backfill.py** — 对历史报告的 finalCanvas 回溯补测 judge 分，建立评分基线
 - **token_benchmark.py** — Token 成本基准（输入侧 + 输入输出总成本双口径）
+
+### 运行日志（可观测性）
+
+每次 Agent 调用（含 live 评测、前端 chat/chat_stream）落库到 `agent_runs` 表：
+状态（success / waiting / degraded / error）、修正轮次、最终验证摘要、耗时、
+prompt 与回复截断。日志是旁路——落库失败只留 warning，绝不影响主流程。
+
+```bash
+python -m eval.golden_suggest --write   # 运行统计 + golden 候选清单
+```
 
 ```bash
 # 回归（CI / 本地快速验证，无需 API key）
@@ -162,7 +173,9 @@ LLM 调用失败后走本地 fallback 返回空画布，导致生成类任务分
 只需 1~2 次调用，不受影响）。
 
 **排查特征**：某任务单独跑 100 分、全量连跑却只有 20~40 分，且失败项是
-`MIN_COMPONENTS`（0 组件）+ 全部文本缺失——就是撞限流，不是模型质量问题。
+`MIN_COMPONENTS`（0 组件）+ 全部文本缺失——就是撞限流/额度，不是模型质量问题。
+两类错误都会触发本地 fallback 产出空画布：`429 rate_limited`（RPM 限流）与
+`402 quota_exceeded`（额度耗尽，judge 同时报错）。后者需要充值/换 key 后重跑。
 
 **解法**：
 1. live 模式加 `--delay`（默认 7s，可调大）在任务间避让限流窗口；

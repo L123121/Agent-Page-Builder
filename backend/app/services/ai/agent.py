@@ -13,6 +13,7 @@
 """
 
 import logging
+import time
 from typing import Any, Dict, List
 
 from langgraph.types import Command
@@ -23,6 +24,7 @@ from .agent_nodes import executor_node, planner_node  # noqa: F401 (再导出)
 from .agent_streaming import run_agent_streaming  # noqa: F401 (再导出)
 from .fallback import run_fallback_agent
 from .graph import agent_graph
+from .run_logger import log_agent_run
 from .stage_routing import next_stage_for_tool, resolve_stage  # noqa: F401 (再导出)
 from .tool_handlers import _gen_id, process_tool_response  # noqa: F401 (再导出)
 from .tools import TOOLS_BY_STAGE, tools_for_stage  # noqa: F401 (再导出)
@@ -95,23 +97,45 @@ async def run_agent(
     }
 
     if not settings.AI_API_KEY:
-        return run_fallback_agent(initial_state, "AI_API_KEY is not configured")
+        fallback_result = run_fallback_agent(initial_state, "AI_API_KEY is not configured")
+        log_agent_run("chat", thread_id, stage, fallback_result, 0, prompt=prompt)
+        return fallback_result
 
     config = {
         "configurable": {
             "thread_id": thread_id or f"anon-{_gen_id(8)}",
         }
     }
+    started = time.monotonic()
     try:
         if resume is not None:
             # 从上次 interrupt 挂起点继续执行（不重复已完成的节点）
             result = await agent_graph.ainvoke(Command(resume=resume), config=config)
         else:
             result = await agent_graph.ainvoke(initial_state, config=config)
-        return _extract_result(result, stage, config)
+        extracted = _extract_result(result, stage, config)
+        log_agent_run(
+            "chat",
+            config["configurable"]["thread_id"],
+            stage,
+            extracted,
+            int((time.monotonic() - started) * 1000),
+            prompt=prompt,
+        )
+        return extracted
     except Exception as e:
         logger.error(f"[AI] Agent failed: {e}", exc_info=True)
-        return {"reply": f"AI 处理失败: {str(e)}", "actions": [], "nextStage": stage}
+        failure = {"reply": f"AI 处理失败: {str(e)}", "actions": [], "nextStage": stage}
+        log_agent_run(
+            "chat",
+            config["configurable"]["thread_id"],
+            stage,
+            failure,
+            int((time.monotonic() - started) * 1000),
+            error=str(e),
+            prompt=prompt,
+        )
+        return failure
 
 
 def _extract_result(result: Dict[str, Any], stage: str, config: Dict[str, Any]) -> Dict[str, Any]:

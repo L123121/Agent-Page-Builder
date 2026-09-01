@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import Base, engine, get_db
+from app.models.agent_run import AgentRun  # noqa: F401 — 注册运行日志表
 from app.models.page import Page
 from app.models.user import User  # noqa: F401 — 注册 User 表
 from app.routers import auth, pages, ai

@@ -6,11 +6,13 @@
 """
 
 import logging
+import time
 from typing import Any, Dict, List
 
 from app.config import settings
 
 from .graph import agent_graph
+from .run_logger import log_agent_run
 from .schemas import AgentState
 from .stage_routing import resolve_stage
 from .tools import TOOLS_BY_STAGE
@@ -90,6 +92,18 @@ async def run_agent_streaming(
             "thread_id": thread_id or f"anon-{generate_id(8)}",
         }
     }
+    started = time.monotonic()
+
+    def _log_run(result_payload: dict, error: str | None = None) -> None:
+        log_agent_run(
+            "chat_stream",
+            config["configurable"]["thread_id"],
+            stage,
+            result_payload,
+            int((time.monotonic() - started) * 1000),
+            error=error,
+            prompt=prompt,
+        )
 
     try:
         # 流式执行 LangGraph：astream 逐节点产出结果
@@ -125,6 +139,7 @@ async def run_agent_streaming(
                 # executor 完成后的最终结果
                 result = node_output.get("result", {})
                 if isinstance(result, dict):
+                    _log_run(result)
                     yield {
                         "type": "agent_done",
                         "result": {
@@ -169,6 +184,7 @@ async def run_agent_streaming(
                             "threadId": config["configurable"]["thread_id"],
                         }
                     else:
+                        _log_run(result)
                         yield {
                             "type": "agent_done",
                             "result": {
@@ -180,4 +196,5 @@ async def run_agent_streaming(
                         }
     except Exception as e:
         logger.error(f"[AI] Agent streaming failed: {e}", exc_info=True)
+        _log_run({"reply": f"AI 处理失败: {e}"}, error=str(e))
         yield {"type": "agent_error", "error": str(e)}

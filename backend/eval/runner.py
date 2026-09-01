@@ -27,6 +27,8 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from app.database import Base, engine  # noqa: E402 — live 运行日志需要 agent_runs 表
+from app.models.agent_run import AgentRun as _AgentRun  # noqa: E402,F401 — 注册表模型
 from app.services.ai.agent import executor_node, planner_node, run_agent  # noqa: E402
 from app.services.ai.canvas_runtime import apply_actions_to_canvas  # noqa: E402
 from app.services.ai.component_utils import normalize_component  # noqa: E402
@@ -593,6 +595,8 @@ async def run_eval(
     任务间加延迟可避开限流窗口，得到真实质量分数。
     """
     tasks = tasks if tasks is not None else get_eval_tasks()
+    # live 模式经 run_agent 产生运行日志，确保 agent_runs 表存在（幂等）
+    Base.metadata.create_all(bind=engine)
     results = []
     for index, task in enumerate(tasks):
         if mode == "live" and delay_seconds > 0 and index > 0:

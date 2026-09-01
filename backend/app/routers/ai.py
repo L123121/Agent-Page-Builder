@@ -50,11 +50,15 @@ async def chat_stream(data: AIChatRequest, user: User = Depends(get_current_user
     """流式 AI 对话 — SSE 推送 Agent 执行进度
 
     事件类型：
-      agent_start    → { stage: "discover" }
-      tool_call      → { step: 1, tool: "propose_options", args: {...} }
-      tool_result    → { step: 1, tool: "propose_options", status: "done", validation: {...} }
-      agent_done     → { reply, actions, ... }
-      agent_error    → { error: "..." }
+      agent_start    → { stage }
+      tool_call      → { step: 1, tool: "generate_page" }
+      tool_result    → { step: 1, tool: "generate_page", status: "done", validation: {...} }
+      self_correction→ { step: 2, error: "unresolved_component_ref", detail: {...} }
+      agent_done     → { result }
+        - 正常完成：result.reply / actions / nextStage / validation / trace
+        - planner 挂起等待用户输入：result 带 reply/options/question/plan/threadId
+          与 waitingForInput=true，前端凭 threadId + resume 恢复图执行
+      agent_error    → { error }
     """
 
     async def event_generator():
@@ -72,6 +76,7 @@ async def chat_stream(data: AIChatRequest, user: User = Depends(get_current_user
                 project_knowledge=data.projectKnowledge,
                 conversation_stage=data.conversationStage,
                 thread_id=data.threadId,
+                resume=data.resume,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"

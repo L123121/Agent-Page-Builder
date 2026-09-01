@@ -1,17 +1,25 @@
 """SSE 流式执行 — Agent 每步工具调用都产出进度事件。
 
-与 run_agent（一次性返回）共享同一张图（graph.agent_graph）与阶段路由，
-区别在于用 astream 逐节点产出，前端可实时展示「正在调用什么工具、
-验证结果如何」。事件协议见 routers/ai.py 的 /chat/stream 文档。
+与 run_agent（一次性返回）共享同一张图（graph.agent_graph）、阶段路由与
+结果提取（graph.extract_graph_result），区别在于用 astream(stream_mode="updates")
+逐节点产出，前端可实时展示「正在调用什么工具、验证结果如何」。
+
+关键协议点：planner 等待用户输入（选项/提问/方案确认）通过 interrupt 挂起，
+在 updates 流中以 __interrupt__ 块出现而非节点返回值——这里把挂起载荷合成为
+带 waitingForInput=true 的 agent_done 事件，前端由此渲染卡片并保存 threadId。
+事件协议见 routers/ai.py 的 /chat/stream 文档。
 """
 
 import logging
 import time
 from typing import Any, Dict, List
 
-from app.config import settings
+from langgraph.types import Command
 
-from .graph import agent_graph
+from app.config import settings
+from app.utils.id_generator import generate_id
+
+from .graph import agent_graph, extract_graph_result, has_pending_interrupt
 from .run_logger import log_agent_run
 from .schemas import AgentState
 from .stage_routing import resolve_stage
@@ -33,18 +41,21 @@ async def run_agent_streaming(
     project_knowledge: str = "",
     conversation_stage: str | None = None,
     thread_id: str | None = None,
+    resume: Any | None = None,
 ):
     """流式版 Agent：async generator，每步工具调用都 yield 进度事件。
 
     事件类型：
       {"type": "agent_start", "stage": "discover"}
-      {"type": "tool_call", "step": 1, "tool": "propose_options", "args": {...}}
-      {"type": "tool_result", "step": 1, "tool": "propose_options", "status": "done", "validation": {...}}
+      {"type": "tool_call", "step": 1, "tool": "generate_page"}
+      {"type": "tool_result", "step": 1, "tool": "generate_page", "status": "done",
+       "validation": {...}, "autoFixes": [...]}
+      {"type": "self_correction", "step": 2, "error": "unresolved_component_ref", ...}
       {"type": "agent_done", "result": {...}}
+        - 正常完成：reply/actions/nextStage/validation/trace
+        - planner 挂起：reply/options/question/plan/nextStage/threadId/waitingForInput=true
       {"type": "agent_error", "error": "..."}
     """
-    from app.utils.id_generator import generate_id
-
     history = history or []
     components = components or []
     selected_component_ids = selected_component_ids or []
@@ -53,6 +64,7 @@ async def run_agent_streaming(
     stage = resolve_stage(prompt, components, conversation_stage)
 
     messages = list(history)
+    # 全模态消息：图片作为 image_url 块 + 文字一起发给模型
     if image:
         messages.append({
             "role": "user",
@@ -64,7 +76,7 @@ async def run_agent_streaming(
     else:
         messages.append({"role": "user", "content": prompt})
 
-    yield {"type": "agent_start", "stage": "edit" if stage == "edit" else "execute"}
+    yield {"type": "agent_start", "stage": stage}
 
     if not settings.AI_API_KEY:
         yield {"type": "agent_error", "error": "AI_API_KEY is not configured"}
@@ -92,6 +104,12 @@ async def run_agent_streaming(
             "thread_id": thread_id or f"anon-{generate_id(8)}",
         }
     }
+    # resume 前置检查：线程确实挂起才走恢复；checkpoint 丢失（重启/TTL 淘汰）
+    # 或已无挂起点时降级为新请求执行，前端无需感知差异
+    resume_command = None
+    if resume is not None and await has_pending_interrupt(agent_graph, config):
+        resume_command = Command(resume=resume)
+
     started = time.monotonic()
 
     def _log_run(result_payload: dict, error: str | None = None) -> None:
@@ -106,39 +124,51 @@ async def run_agent_streaming(
         )
 
     try:
-        # 流式执行 LangGraph：astream 逐节点产出结果
-        async for node_name, node_output in agent_graph.astream(initial_state, config=config):
-            if node_name == "executor":
-                # executor 节点产出 trace 数组，逐条 yield
-                trace = node_output.get("trace", [])
-                for entry in trace:
-                    if entry.get("type") == "correction":
-                        yield {
-                            "type": "self_correction",
-                            "step": entry.get("step"),
-                            "error": entry.get("error"),
-                            "detail": {
-                                key: value for key, value in entry.items()
-                                if key not in ("type", "step", "error", "execution", "autoFixes")
-                            },
-                        }
+        stream_input = resume_command if resume_command is not None else initial_state
+        # stream_mode="updates"：每步产出 {node_name: node_output}（挂起时为 __interrupt__）
+        async for chunk in agent_graph.astream(stream_input, config=config, stream_mode="updates"):
+            for node_name, node_output in chunk.items():
+                if node_name == "__interrupt__":
+                    # planner 挂起等待用户输入：与 run_agent 非流式协议保持一致
+                    waiting_result = extract_graph_result(
+                        {"__interrupt__": node_output}, stage, config["configurable"]["thread_id"]
+                    )
+                    _log_run(waiting_result)
+                    yield {"type": "agent_done", "result": waiting_result}
+                    continue
+                if node_name == "executor":
+                    # executor 返回 {"result": {reply/actions/nextStage/validation/trace}}
+                    result = (node_output or {}).get("result", {})
+                    if not isinstance(result, dict):
                         continue
-                    yield {
-                        "type": "tool_call",
-                        "step": entry.get("step"),
-                        "tool": entry.get("tool"),
-                    }
-                    yield {
-                        "type": "tool_result",
-                        "step": entry.get("step"),
-                        "tool": entry.get("tool"),
-                        "status": "done",
-                        "validation": entry.get("validation"),
-                        "autoFixes": entry.get("autoFixes", []),
-                    }
-                # executor 完成后的最终结果
-                result = node_output.get("result", {})
-                if isinstance(result, dict):
+                    trace = result.get("trace", [])
+                    for entry in trace:
+                        if not isinstance(entry, dict):
+                            continue
+                        if entry.get("type") == "correction":
+                            yield {
+                                "type": "self_correction",
+                                "step": entry.get("step"),
+                                "error": entry.get("error"),
+                                "detail": {
+                                    key: value for key, value in entry.items()
+                                    if key not in ("type", "step", "error", "execution", "autoFixes")
+                                },
+                            }
+                            continue
+                        yield {
+                            "type": "tool_call",
+                            "step": entry.get("step"),
+                            "tool": entry.get("tool"),
+                        }
+                        yield {
+                            "type": "tool_result",
+                            "step": entry.get("step"),
+                            "tool": entry.get("tool"),
+                            "status": "done",
+                            "validation": entry.get("validation"),
+                            "autoFixes": entry.get("autoFixes", []),
+                        }
                     _log_run(result)
                     yield {
                         "type": "agent_done",
@@ -149,51 +179,25 @@ async def run_agent_streaming(
                             "validation": result.get("validation"),
                             "trace": trace,
                             "threadId": config["configurable"]["thread_id"],
+                            "waitingForInput": False,
                         },
                     }
-            elif node_name == "planner":
-                # planner 产出：选项/问题/方案
-                result = node_output.get("result", {})
-                if isinstance(result, dict):
-                    if result.get("options"):
-                        yield {"type": "tool_call", "tool": "propose_options"}
-                        yield {
-                            "type": "tool_result",
-                            "tool": "propose_options",
-                            "status": "waiting_for_user",
-                            "options": result.get("options"),
+                elif node_name == "planner":
+                    # planner 正常完成（产出动作或降级回复）；挂起走 __interrupt__ 分支
+                    result = (node_output or {}).get("result", {})
+                    if not isinstance(result, dict):
+                        continue
+                    _log_run(result)
+                    yield {
+                        "type": "agent_done",
+                        "result": {
+                            "reply": result.get("reply", ""),
+                            "actions": result.get("actions", []),
+                            "nextStage": result.get("nextStage", "edit"),
                             "threadId": config["configurable"]["thread_id"],
-                        }
-                    elif result.get("question"):
-                        yield {"type": "tool_call", "tool": "ask_question"}
-                        yield {
-                            "type": "tool_result",
-                            "tool": "ask_question",
-                            "status": "waiting_for_user",
-                            "question": result.get("question"),
-                            "suggestions": result.get("suggestions"),
-                            "threadId": config["configurable"]["thread_id"],
-                        }
-                    elif result.get("plan"):
-                        yield {"type": "tool_call", "tool": "confirm_plan"}
-                        yield {
-                            "type": "tool_result",
-                            "tool": "confirm_plan",
-                            "status": "waiting_for_user",
-                            "plan": result.get("plan"),
-                            "threadId": config["configurable"]["thread_id"],
-                        }
-                    else:
-                        _log_run(result)
-                        yield {
-                            "type": "agent_done",
-                            "result": {
-                                "reply": result.get("reply", ""),
-                                "actions": result.get("actions", []),
-                                "nextStage": result.get("nextStage", "edit"),
-                                "threadId": config["configurable"]["thread_id"],
-                            },
-                        }
+                            "waitingForInput": False,
+                        },
+                    }
     except Exception as e:
         logger.error(f"[AI] Agent streaming failed: {e}", exc_info=True)
         _log_run({"reply": f"AI 处理失败: {e}"}, error=str(e))

@@ -138,6 +138,8 @@ export interface ChatStreamParams {
     projectKnowledge?: string
     conversationStage?: AgentStage
     threadId?: string
+    /** 中断恢复数据：上次 agent_done 带 waitingForInput=true 时，把用户本轮输入作为 resume 传回 */
+    resume?: unknown
     image?: string
 }
 

@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     AI_API_KEY: str = ""
     AI_BASE_URL: str = "https://api.stepfun.com/step_plan/v1"
     AI_MODEL: str = "step-3.7-flash"
+    # 工具调用型 Agent 用低温度：决策稳定、闭环修复收敛快
+    AI_TEMPERATURE: float = 0.2
+    AI_MAX_TOKENS: int = 4096
+    # 单次 LLM 请求超时（秒），避免慢请求拖死 Agent 闭环
+    AI_REQUEST_TIMEOUT: float = 120.0
     AI_MAX_RETRIES: int = 3
     AI_RETRY_BACKOFF_BASE: int = 2
     AI_MAX_AGENT_STEPS: int = 6
@@ -29,6 +34,8 @@ class Settings(BaseSettings):
     AI_CHECKPOINT_BACKEND: str = "memory"
     AI_REDIS_URL: str = ""
     AI_THREAD_TTL_SECONDS: int = 3600
+    # 进程内 checkpointer 最大保留线程数（LRU 淘汰，防内存无限增长）
+    AI_CHECKPOINT_MAX_THREADS: int = 500
 
     # 可观测性（LangSmith，可选）
     LANGSMITH_TRACING: bool = False

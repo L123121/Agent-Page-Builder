@@ -221,6 +221,9 @@ export function useAIChat(chatBodyRef: Ref<HTMLElement | undefined>) {
                 projectKnowledge: `页面名称：${store.currentPageTitle}。优先复用当前组件结构，遵守现有画布尺寸和视觉风格。`,
                 conversationStage: conversationStage.value,
                 threadId: aiThreadId.value || undefined,
+                // 上轮 planner 挂起（waitingForInput=true）时，把本轮用户输入作为 resume 恢复图执行；
+                // 服务端会在 checkpoint 丢失时自动降级为新请求，无需前端处理
+                resume: waitingForInput.value ? prompt : undefined,
                 image: uploadedImage.value || undefined,
             }, handleStreamEvent)
 

@@ -102,6 +102,9 @@ POST /api/auth/refresh    # 刷新（轮换双 token）
 - **AI Agent**：LangGraph 阶段路由 + 工具白名单；生成和编辑阶段采用“观察 → 单工具执行 → 确定性验证 → 自动修复 → 再验证”的有限闭环
 - **画布环境上下文**：Agent 可读取现有组件、锁定与层级状态、选中组件、框选结果、视口尺寸和项目知识
 - **安全执行**：工具先在隔离画布快照中运行，通过越界、重叠、文本溢出、内容完整性和颜色对比度检查后才生成最终差异
+- **流式会话（SSE）**：`/api/ai/chat/stream` 以 `stream_mode="updates"` 逐节点推送 `agent_start / tool_call / tool_result / self_correction / agent_done / agent_error`；planner 等待用户输入（选项/提问/方案确认）时经 interrupt 挂起，服务端把挂起载荷合成为带 `waitingForInput=true` 的 `agent_done`，前端凭 `threadId + resume` 恢复图执行（checkpoint 丢失自动降级为新请求）
+- **会话状态治理**：进程内 checkpointer 带 TTL 与容量上限（`AI_THREAD_TTL_SECONDS` / `AI_CHECKPOINT_MAX_THREADS`），按最近活跃淘汰线程，防长期运行内存无限增长；LLM 温度/输出上限/请求超时可配（`AI_TEMPERATURE` / `AI_MAX_TOKENS` / `AI_REQUEST_TIMEOUT`）
+- **请求护栏**：AI 请求的 prompt/历史/画布组件/图片大小均有上限（超限 422），单次生成组件数封顶，防病态输入拖垮 Agent 闭环与 O(n²) 自动布局
 
 ## Agent 评测（Eval）
 

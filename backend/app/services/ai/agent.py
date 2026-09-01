@@ -23,7 +23,7 @@ from app.config import settings
 from .agent_nodes import executor_node, planner_node  # noqa: F401 (再导出)
 from .agent_streaming import run_agent_streaming  # noqa: F401 (再导出)
 from .fallback import run_fallback_agent
-from .graph import agent_graph
+from .graph import agent_graph, extract_graph_result, has_pending_interrupt
 from .run_logger import log_agent_run
 from .stage_routing import next_stage_for_tool, resolve_stage  # noqa: F401 (再导出)
 from .tool_handlers import _gen_id, process_tool_response  # noqa: F401 (再导出)
@@ -108,12 +108,13 @@ async def run_agent(
     }
     started = time.monotonic()
     try:
-        if resume is not None:
-            # 从上次 interrupt 挂起点继续执行（不重复已完成的节点）
+        if resume is not None and await has_pending_interrupt(agent_graph, config):
+            # 从上次 interrupt 挂起点继续执行（不重复已完成的节点）；
+            # checkpoint 丢失或无挂起点时降级为新请求执行
             result = await agent_graph.ainvoke(Command(resume=resume), config=config)
         else:
             result = await agent_graph.ainvoke(initial_state, config=config)
-        extracted = _extract_result(result, stage, config)
+        extracted = extract_graph_result(result, stage, config["configurable"]["thread_id"])
         log_agent_run(
             "chat",
             config["configurable"]["thread_id"],
@@ -139,29 +140,5 @@ async def run_agent(
 
 
 def _extract_result(result: Dict[str, Any], stage: str, config: Dict[str, Any]) -> Dict[str, Any]:
-    """从 LangGraph 返回值中提取前端可用的结果。
-
-    - 正常结束：返回节点写入的 result。
-    - interrupt 挂起（等待用户输入）：把挂起载荷（选项/问题/方案）转成响应，
-      并附带 thread_id，前端后续请求凭 thread_id + resume 恢复执行。
-    """
-    interrupts = result.get("__interrupt__")
-    if interrupts:
-        payload = dict(interrupts[0].value)
-        inner = payload.get("payload") or {}
-        return {
-            "reply": inner.get("reply", ""),
-            "actions": [],
-            "options": inner.get("options"),
-            "question": inner.get("question"),
-            "suggestions": inner.get("suggestions"),
-            "plan": inner.get("plan"),
-            "nextStage": payload.get("nextStage") or inner.get("nextStage") or stage,
-            "threadId": config["configurable"]["thread_id"],
-            "waitingForInput": True,
-        }
-    # 正常结束：返回节点写入的 result，并透传 planner 确认的方案（供评测/前端使用）
-    normal_result = result.get("result", {"reply": "", "actions": []})
-    if isinstance(normal_result, dict) and result.get("plan") is not None:
-        normal_result = {**normal_result, "plan": result["plan"]}
-    return normal_result
+    """向后兼容别名 — 结果提取已上移 graph.extract_graph_result（流式/非流式共用）。"""
+    return extract_graph_result(result, stage, config["configurable"]["thread_id"])

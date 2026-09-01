@@ -22,8 +22,10 @@ def get_llm_client() -> ChatOpenAI:
             model=settings.AI_MODEL,
             api_key=settings.AI_API_KEY,
             base_url=settings.AI_BASE_URL,
-            temperature=0.7,
-            max_tokens=4096,
+            temperature=settings.AI_TEMPERATURE,
+            max_tokens=settings.AI_MAX_TOKENS,
+            timeout=settings.AI_REQUEST_TIMEOUT,
+            max_retries=0,  # 重试统一由 agent_nodes._invoke_llm 控制节奏（指数退避），避免双层重试叠加
         )
         logger.info(f"[AI] LLM client initialized: model={settings.AI_MODEL}")
     return _llm_client

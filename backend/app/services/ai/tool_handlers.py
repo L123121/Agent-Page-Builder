@@ -21,6 +21,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# 单次生成组件数上限：auto_layout 是 O(n²)，且 LLM 偶发失控会吐出海量
+# 垃圾组件拖垮验证与前端渲染；正常海报/报名页远达不到该量级
+MAX_GENERATED_COMPONENTS = 100
+
 
 def process_tool_response(response, state: AgentState) -> dict:
     """只执行第一个合法工具调用，杜绝跨阶段动作被合并。
@@ -49,7 +53,7 @@ def process_tool_response(response, state: AgentState) -> dict:
             continue
         handler = _TOOL_HANDLERS.get(name)
         if handler:
-            handler(args, state, result, False)
+            handler(args, state, result)
             result["nextStage"] = next_stage_for_tool(name, state["stage"])
             return result
 
@@ -90,16 +94,14 @@ def resolve_component_reference(candidate: str, components: list[dict]) -> str |
 
 # ==================== 各工具的处理函数 ====================
 
-def _handle_ask_question(args: dict, state: AgentState, result: dict, seen_reply: bool) -> None:
+def _handle_ask_question(args: dict, state: AgentState, result: dict) -> None:
     result["question"] = args.get("question", "")
-    if not seen_reply:
-        result["reply"] = args.get("question", "")
+    result["reply"] = args.get("question", "")
     result["suggestions"] = args.get("suggestions", [])
 
 
-def _handle_propose_options(args: dict, state: AgentState, result: dict, seen_reply: bool) -> None:
-    if not seen_reply:
-        result["reply"] = args.get("reply", "")
+def _handle_propose_options(args: dict, state: AgentState, result: dict) -> None:
+    result["reply"] = args.get("reply", "")
     result["options"] = [
         {"id": opt.get("id", _gen_id()), "title": opt.get("title", "方案"),
          "description": opt.get("description", ""), "tag": opt.get("tag", "")}
@@ -107,20 +109,23 @@ def _handle_propose_options(args: dict, state: AgentState, result: dict, seen_re
     ]
 
 
-def _handle_confirm_plan(args: dict, state: AgentState, result: dict, seen_reply: bool) -> None:
-    if not seen_reply:
-        result["reply"] = args.get("summary", "")
+def _handle_confirm_plan(args: dict, state: AgentState, result: dict) -> None:
+    result["reply"] = args.get("summary", "")
     result["plan"] = {"summary": args.get("summary", ""), "details": args.get("details", [])}
 
 
-def _handle_generate_page(args: dict, state: AgentState, result: dict, seen_reply: bool) -> None:
+def _handle_generate_page(args: dict, state: AgentState, result: dict) -> None:
     cs = args.get("canvasStyle", {})
     cw = cs.get("width", state["canvas_width"])
     ch = cs.get("height", state["canvas_height"])
     comps = _normalize_components(args.get("components", []))
+    if len(comps) > MAX_GENERATED_COMPONENTS:
+        logger.warning(
+            "[AI] generated components truncated: %s -> %s", len(comps), MAX_GENERATED_COMPONENTS
+        )
+        comps = comps[:MAX_GENERATED_COMPONENTS]
     comps = auto_layout_components(comps, cw, ch)
-    if not seen_reply:
-        result["reply"] = args.get("reply", "页面已生成")
+    result["reply"] = args.get("reply", "页面已生成")
     result["actions"].append({
         "type": "generate",
         "components": comps,
@@ -133,9 +138,8 @@ def _handle_generate_page(args: dict, state: AgentState, result: dict, seen_repl
     })
 
 
-def _handle_edit_page(args: dict, state: AgentState, result: dict, seen_reply: bool) -> None:
-    if not seen_reply:
-        result["reply"] = args.get("reply", "已修改")
+def _handle_edit_page(args: dict, state: AgentState, result: dict) -> None:
+    result["reply"] = args.get("reply", "已修改")
     existing_ids = {c["id"] for c in state.get("components", [])}
     max_z = max((c.get("zIndex", 1) for c in state.get("components", [])), default=0)
     add_index = 0
@@ -180,7 +184,7 @@ def _handle_edit_page(args: dict, state: AgentState, result: dict, seen_reply: b
                     result["actions"].append(action)
 
 
-def _handle_finish(args: dict, state: AgentState, result: dict, seen_reply: bool) -> None:
+def _handle_finish(args: dict, state: AgentState, result: dict) -> None:
     result["reply"] = args.get("reply") or args.get("summary") or "当前画布已满足需求"
     result["finished"] = True
 

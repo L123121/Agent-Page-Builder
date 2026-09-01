@@ -27,7 +27,21 @@ cp .env.example .env
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-> 注意：当前为本地工具模式，页面 CRUD 与分享接口无认证，请勿将 8000 端口直接暴露到公网。
+> 认证：页面 CRUD / AI 接口要求 JWT 登录（注册即用，见下方「认证」）。**生产部署必须把 `.env` 中的 `JWT_SECRET` 换成随机强密钥**，并配置 `CORS_ORIGINS` 为实际前端域名。
+
+## 认证
+
+- **双 token**：登录返回 access（30 分钟，随请求携带）+ refresh（7 天，仅用于换新）；刷新时轮换签发。密码用 bcrypt 哈希存储
+- **页面归属隔离**：`pages.user_id` 绑定创建者，列表/读写/版本/分享均按归属过滤，他人资源返回 404（与不存在同语义，防资源枚举）
+- **公开分享**：`GET /api/shared/{token}` 匿名只读（token 为 32 位 hex，取消分享即失效）；分享/取消分享需归属者操作
+- **前端**：axios 拦截器自动注入 Bearer；401 单飞刷新（并发只发一次）并重试原请求，失败弹登录框；SSE 流式请求同带 token
+
+```bash
+# 认证相关接口
+POST /api/auth/register   # 注册（返回双 token）
+POST /api/auth/login      # 登录
+POST /api/auth/refresh    # 刷新（轮换双 token）
+```
 
 ## 功能一览
 
@@ -43,7 +57,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 | 数据请求 | 组件支持 API 数据绑定与定时轮询 |
 | HTML 导出 | 导出为自包含独立 HTML 文件 |
 | AI 生成 | 对话式页面生成，LLM 自主决策 |
-| 页面管理 | FastAPI 后端 CRUD + 分享，自动同步到后端，localStorage 离线兜底 |
+| 页面管理 | FastAPI 后端 CRUD + 分享（JWT 登录 + 用户归属隔离），自动同步到后端，localStorage 离线兜底 |
 | 暗黑模式 | 支持明暗主题切换 |
 
 ## 项目结构
@@ -93,12 +107,13 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 `backend/eval/` 提供一套三层评测体系，用于量化 Agent 质量、回归防劣化：
 
-- **tasks.py** — 7 条 golden 任务（生成/编辑/删除/布局/模糊需求必须追问），每条含初始画布与期望标准
-- **scorer.py** — 逐项检查打分（组件覆盖、文本命中、验证器通过、修复轮次、方案产出等），`score = 通过项/总项 × 100`
+- **tasks.py** — 31 条 golden 任务：生成×12、编辑×6、删除×3、布局×2、交互×2，以及 **6 条对抗性用例**（越界修复、未知组件引用、阶段白名单拒绝、锁定组件重定向、删除不存在组件、planner 误调工具——每条都要求走完「错误 → 反馈 → 自省修正」闭环），每条含初始画布与期望标准
+- **scorer.py** — 逐项检查打分（组件覆盖、文本命中、验证器通过、修复轮次、方案产出、自省修正等），`score = 通过项/总项 × 100`
 - **judge.py** — LLM-as-Judge 质量评审（0~100，5 维 rubric：内容完整性/组件覆盖/布局/视觉/需求符合度），与规则分互补
 - **runner.py** — 双模式运行：
-  - **mock 模式**：脚本化 LLM，不消耗 Token，秒级回归（CI 使用，`--require-pass-rate 100` 门禁）
+  - **mock 模式**：脚本化 LLM（支持多轮响应脚本，精确回归「犯错→反馈→修正」闭环），不消耗 Token，秒级回归（CI 使用，`--require-pass-rate 100` 门禁）
   - **live 模式**：真实 LLM 全链路，自动模拟多轮交互（选项→确认→生成），量化真实质量（含 judge 分）
+- **summary.py** — 聚合最新 mock/live 报告为 Markdown 表格（`python -m eval.summary --write`），保证文档与报告一致
 - **judge_backfill.py** — 对历史报告的 finalCanvas 回溯补测 judge 分，建立评分基线
 - **token_benchmark.py** — Token 成本基准（输入侧 + 输入输出总成本双口径）
 
@@ -109,12 +124,35 @@ cd backend && python -m eval.runner --mode mock
 # 真实质量评测（需要 AI_API_KEY）
 python -m eval.runner --mode live
 
-# 单任务 / 调整限流延迟
+# 单任务 / 调整限流延迟 / 汇总报告
 python -m eval.runner --mode live --task poster_dance_recruit
 python -m eval.runner --mode live --delay 15
+python -m eval.summary --write
 ```
 
-报告输出到 `backend/eval/reports/eval-{mode}-{时间戳}.json`，可对比历史基线。
+报告输出到 `backend/eval/reports/eval-{mode}-{时间戳}.json`，可对比历史基线；分任务明细表见 `backend/eval/reports/summary.md`（由 `summary.py` 生成）。
+
+### 最新回归结果（mock，31/31 通过）
+
+| 任务 | 类别 | mock | | 任务 | 类别 | mock |
+|---|---|---|---|---|---|---|
+| poster_dance_recruit | 生成 | ✅ | | edit_button_text | 编辑 | ✅ |
+| poster_activity_promo | 生成 | ✅ | | edit_text_color | 编辑 | ✅ |
+| form_registration | 生成 | ✅ | | edit_move_component | 编辑 | ✅ |
+| poster_lecture | 生成 | ✅ | | edit_font_shrink | 编辑 | ✅ |
+| poster_job_fair | 生成 | ✅ | | edit_multi_component | 编辑 | ✅ |
+| poster_movie_night | 生成 | ✅ | | delete_component | 删除 | ✅ |
+| poster_sports_meet | 生成 | ✅ | | delete_button | 删除 | ✅ |
+| form_questionnaire | 生成 | ✅ | | delete_second_text | 删除 | ✅ |
+| form_vote | 生成 | ✅ | | layout_center_focus | 布局 | ✅ |
+| page_club_intro | 生成 | ✅ | | layout_vertical_stack | 布局 | ✅ |
+| page_lost_found | 生成 | ✅ | | empty_canvas_vague | 交互 | ✅ |
+| page_notice | 生成 | ✅ | | empty_canvas_style_choice | 交互 | ✅ |
+| adv_out_of_bounds_repair | 对抗性 | ✅ | | adv_locked_component_redirect | 对抗性 | ✅ |
+| adv_unknown_ref_self_correct | 对抗性 | ✅ | | adv_delete_missing_self_correct | 对抗性 | ✅ |
+| adv_rejected_tool_self_correct | 对抗性 | ✅ | | adv_planner_self_correct | 对抗性 | ✅ |
+
+对抗性用例验证的自省修正闭环：`tool_not_allowed`（阶段白名单拒绝）、`unresolved_component_ref`（无效组件引用）、`no_canvas_diff`（动作被跳过/锁定）三类反馈都能让模型在下一轮自主纠正，scorer 的 `SELF_CORRECTED` 检查项逐条断言。
 
 ### 已知坑：RPM 限流导致 live 分数失真
 

@@ -19,6 +19,8 @@ export interface EventMap {
   unmove: []
   'v-click': [id: string]
   'v-hover': [id: string]
+  /** 登录成功（含注册），页面列表等需要重新拉取的地方监听此事件 */
+  'auth:login': []
 }
 
 type EventName = keyof EventMap

@@ -3,14 +3,35 @@
         <div class="page-manager">
             <div class="header">
                 <h3>页面管理</h3>
-                <el-button
-                    type="primary"
-                    size="small"
-                    :loading="isSaving"
-                    @click="handleCreate"
-                >
-                    新建页面
-                </el-button>
+                <div class="header-actions">
+                    <span v-if="authState.username" class="user-chip" :title="authState.username">
+                        {{ authState.username }}
+                    </span>
+                    <el-button
+                        v-if="isAuthenticated()"
+                        text
+                        size="small"
+                        @click="handleLogout"
+                    >
+                        退出
+                    </el-button>
+                    <el-button
+                        v-else
+                        text
+                        size="small"
+                        @click="requireLogin"
+                    >
+                        登录
+                    </el-button>
+                    <el-button
+                        type="primary"
+                        size="small"
+                        :loading="isSaving"
+                        @click="handleCreate"
+                    >
+                        新建页面
+                    </el-button>
+                </div>
             </div>
 
             <div v-loading="isLoading" class="page-list">
@@ -57,6 +78,7 @@ import Modal from './Modal.vue'
 import { usePageManager } from '@/composables/usePageManager'
 import { useStore } from '@/store'
 import { storeToRefs } from 'pinia'
+import { authState, isAuthenticated, authLogout, requireLogin } from '@/utils/auth'
 
 const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<(e: 'update:modelValue', value: boolean) => void>()
@@ -72,6 +94,12 @@ const { pages, isLoading, isSaving, loadPages, createPage, openPage, deletePage,
 watch(visible, v => {
     if (v) loadPages()
 })
+
+function handleLogout(): void {
+    authLogout()
+    pages.value = []
+    requireLogin()
+}
 
 function formatDate(iso: string): string {
     if (!iso) return ''
@@ -144,6 +172,21 @@ async function handleCopyShareLink(id: string): Promise<void> {
         h3 {
             margin: 0;
             font-size: 18px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .user-chip {
+            max-width: 100px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 12px;
+            color: #606266;
         }
     }
 

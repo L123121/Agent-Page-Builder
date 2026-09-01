@@ -10,13 +10,27 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import Base, engine, get_db
 from app.models.page import Page
-from app.routers import pages, ai
+from app.models.user import User  # noqa: F401 — 注册 User 表
+from app.routers import auth, pages, ai
+from sqlalchemy import inspect, text
+
+
+def _ensure_pages_user_id_column() -> None:
+    """轻量迁移：早期建库的 pages 表可能缺 user_id 列（create_all 不会改已有表）。"""
+    inspector = inspect(engine)
+    if "pages" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("pages")}
+    if "user_id" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE pages ADD COLUMN user_id VARCHAR NOT NULL DEFAULT 'anonymous'"))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 启动时创建表
+    # 启动时创建表 + 轻量迁移
     Base.metadata.create_all(bind=engine)
+    _ensure_pages_user_id_column()
     yield
 
 
@@ -37,6 +51,7 @@ app.add_middleware(
 )
 
 # 挂载路由
+app.include_router(auth.router, prefix="/api/auth")
 app.include_router(pages.router, prefix="/api/pages")
 app.include_router(ai.router, prefix="/api/ai")
 

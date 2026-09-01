@@ -9,6 +9,12 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./lowcode.db"
     CORS_ORIGINS: str = "http://localhost:8080,http://localhost:5173"
 
+    # Auth (JWT 双 token)
+    JWT_SECRET: str = "dev-secret-change-me-in-env"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
     # AI (StepFun, OpenAI-compatible)
     AI_API_KEY: str = ""
     AI_BASE_URL: str = "https://api.stepfun.com/step_plan/v1"

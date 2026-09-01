@@ -5,11 +5,12 @@
  * 自动与 Pinia store 的 componentData / canvasStyleData 同步。
  */
 
-import { ref } from 'vue'
+import { ref, onScopeDispose } from 'vue'
 import { useStore } from '@/store'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { pagesApi, type PageSummary } from '@/utils/api'
+import eventBus from '@/utils/eventBus'
 import type { ComponentData, CanvasStyleData } from '@/types'
 
 export function usePageManager() {
@@ -32,6 +33,14 @@ export function usePageManager() {
             isLoading.value = false
         }
     }
+
+    // 登录成功后重新拉取列表（切换账号看到各自的页面）
+    eventBus.on('auth:login', () => {
+        void loadPages()
+    })
+    onScopeDispose(() => {
+        eventBus.off('auth:login')
+    })
 
     /** 创建新页面并设为当前编辑页 */
     async function createPage(title = '未命名页面'): Promise<void> {

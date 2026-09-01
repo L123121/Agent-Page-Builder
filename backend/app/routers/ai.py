@@ -1,10 +1,15 @@
-"""AI 对话路由 — 调用 LangGraph Agent（单节点 + 5 工具）"""
+"""AI 对话路由 — 调用 LangGraph Agent（planner/executor 双 Agent）
+
+两个端点都要求 JWT 鉴权（LLM 调用有真实成本，不能匿名打）。
+"""
 
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
+from app.dependencies import get_current_user
+from app.models.user import User
 from app.schemas.ai import AIChatRequest, AIChatResponse
 from app.services.ai import run_agent, run_agent_streaming
 
@@ -12,7 +17,7 @@ router = APIRouter()
 
 
 @router.post("/chat", response_model=AIChatResponse)
-async def chat(data: AIChatRequest):
+async def chat(data: AIChatRequest, user: User = Depends(get_current_user)):
     """AI 对话 — LLM 自主决策使用哪个工具
 
     支持 checkpoint 状态持久化与中断恢复：
@@ -41,7 +46,7 @@ async def chat(data: AIChatRequest):
 
 
 @router.post("/chat/stream")
-async def chat_stream(data: AIChatRequest):
+async def chat_stream(data: AIChatRequest, user: User = Depends(get_current_user)):
     """流式 AI 对话 — SSE 推送 Agent 执行进度
 
     事件类型：

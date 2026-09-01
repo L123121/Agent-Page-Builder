@@ -2,8 +2,14 @@
     <!-- ElementPlus 全局配置：size 保持原项目的 'small' -->
     <el-config-provider size="small">
         <router-view />
+        <!-- 全局登录对话框：401 拦截 / 页面管理登出入口触发 -->
+        <LoginDialog />
     </el-config-provider>
 </template>
+
+<script setup lang="ts">
+import LoginDialog from '@/components/Auth/LoginDialog.vue'
+</script>
 
 <style>
 #app {

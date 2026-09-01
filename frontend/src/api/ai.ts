@@ -3,6 +3,8 @@
  */
 import axios from 'axios'
 import type { ComponentData, CanvasStyleData } from '@/types'
+import { getAccessToken } from '@/utils/auth'
+import { withAuthInterceptors } from '@/utils/api'
 
 export interface ChatMessage {
     role: 'user' | 'assistant'
@@ -62,6 +64,9 @@ const api = axios.create({
     timeout: 90000,
 })
 
+// AI 接口有真实 LLM 成本，后端强制鉴权：复用 Bearer 注入 + 401 静默刷新
+withAuthInterceptors(api)
+
 /**
  * AI 对话：LLM 自主决策使用哪个工具
  */
@@ -97,12 +102,15 @@ export async function chatWithAI(params: {
 
 /** SSE 流式事件类型 */
 export interface StreamEvent {
-    type: 'agent_start' | 'tool_call' | 'tool_result' | 'agent_done' | 'agent_error'
+    type: 'agent_start' | 'tool_call' | 'tool_result' | 'self_correction' | 'agent_done' | 'agent_error'
     stage?: AgentStage
     step?: number
     tool?: string
     status?: 'done' | 'waiting_for_user'
     args?: Record<string, unknown>
+    /** self_correction：反馈触发的自省修正轮次（tool_not_allowed / unresolved_component_ref 等） */
+    error?: string
+    detail?: Record<string, unknown>
     validation?: AIChatResponse['validation']
     autoFixes?: Array<Record<string, unknown>>
     options?: AIOption[]
@@ -111,7 +119,6 @@ export interface StreamEvent {
     plan?: AIPlan
     threadId?: string
     result?: AIChatResponse
-    error?: string
 }
 
 /** 流式请求参数（与 chatWithAI 基本一致，去掉 signal，改用 onEvent 回调） */
@@ -147,7 +154,10 @@ export async function chatWithAIStream(
     const baseURL = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
     const response = await fetch(`${baseURL}/api/ai/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            ...(getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {}),
+        },
         body: JSON.stringify(params),
     })
 

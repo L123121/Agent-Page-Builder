@@ -24,7 +24,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run unit tests
-        run: python -m unittest tests.test_ai_agent
+        run: python -m unittest discover -s tests -p "test_*.py"
 
       - name: Run agent eval (mock mode, 100% gate)
         # mock 模式使用脚本化 LLM，无需 API key，确定性回归 Agent 逻辑；

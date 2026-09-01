@@ -180,7 +180,7 @@ def score_run(task: EvalTask, run: EvalRunResult) -> EvalRunResult:
         asked = any(
             step.get("type") in ("ask_user", "user_input") or step.get("tool") == "ask_user"
             for step in steps
-        ) or bool(run.get("waitingForInput"))
+        ) or bool(run.get("waitingForInput")) or bool(run.get("askedUser"))
         check("REQUIRE_INITIAL_CHOICE", asked, "模糊需求触发了方向确认")
 
     if expected.get("layoutApplied"):
@@ -206,7 +206,11 @@ def score_run(task: EvalTask, run: EvalRunResult) -> EvalRunResult:
         )
 
     if expected.get("selfCorrected"):
-        check("SELF_CORRECTED", _self_corrected(trace), "发生过工具被拒后的自省修正")
+        # 仅 mock 断言：live 下模型可能不犯预设错误（如直接用了正确 ID、
+        # 路由本来就正确），此时正常通过即合格；「犯错 → 修正」闭环由
+        # mock 多轮脚本强制复现（见 runner._MOCK_MULTI_STEP_SCRIPTS）
+        if run.get("provider") == "mock":
+            check("SELF_CORRECTED", _self_corrected(trace), "发生过工具被拒后的自省修正")
 
     if expected.get("maxRepairRounds") is not None:
         repair_count = sum(

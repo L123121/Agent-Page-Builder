@@ -546,7 +546,7 @@ EVAL_TASKS: List[EvalTask] = [
             "minComponents": 3,
             "requireComponents": ["VText"],
             "layoutApplied": True,
-            "centeredLeftTolerance": 30,
+            # 不检查居中：prompt 只要求堆叠与间距，未要求水平居中（首版 live 评测的教训）
             "validatorPass": True,
             "requiredStage": "edit",
             "maxSteps": 8,

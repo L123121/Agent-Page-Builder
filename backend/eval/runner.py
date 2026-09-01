@@ -484,12 +484,15 @@ async def run_live(task: EvalTask, thread_id: str | None = None) -> EvalRunResul
         )
         last_result = result
         trace_all.extend(result.get("trace", []))
+        # 多轮交互确实发生过（后续成功完成时 waitingForInput 已消失，需单独标记）
+        asked_user = bool(result.get("waitingForInput"))
 
         # 多轮交互：Agent interrupt 挂起时自动回复并恢复，直到拿到可执行动作
         for _round in range(max_rounds):
             if not result.get("waitingForInput"):
                 break
 
+            asked_user = True
             resume_value = _auto_resume(result)
             if resume_value is None:
                 break
@@ -518,6 +521,7 @@ async def run_live(task: EvalTask, thread_id: str | None = None) -> EvalRunResul
                 "plan": last_result.get("plan"),
                 "nextStage": last_result.get("nextStage"),
                 "waitingForInput": True,
+                "askedUser": True,
                 "durationMs": int((time.monotonic() - start) * 1000),
                 "tokenUsage": None,
                 "provider": "live",
@@ -542,6 +546,7 @@ async def run_live(task: EvalTask, thread_id: str | None = None) -> EvalRunResul
             "trace": trace_all,
             "plan": last_result.get("plan"),
             "nextStage": last_result.get("nextStage"),
+            "askedUser": asked_user,
             "durationMs": int((time.monotonic() - start) * 1000),
             "tokenUsage": None,
             "provider": "live",

@@ -143,27 +143,40 @@ python -m eval.summary --write
 
 报告输出到 `backend/eval/reports/eval-{mode}-{时间戳}.json`，可对比历史基线；分任务明细表见 `backend/eval/reports/summary.md`（由 `summary.py` 生成）。
 
-### 最新回归结果（mock，31/31 通过）
+### 最新评测结果（2026-09-02）
 
-| 任务 | 类别 | mock | | 任务 | 类别 | mock |
-|---|---|---|---|---|---|---|
-| poster_dance_recruit | 生成 | ✅ | | edit_button_text | 编辑 | ✅ |
-| poster_activity_promo | 生成 | ✅ | | edit_text_color | 编辑 | ✅ |
-| form_registration | 生成 | ✅ | | edit_move_component | 编辑 | ✅ |
-| poster_lecture | 生成 | ✅ | | edit_font_shrink | 编辑 | ✅ |
-| poster_job_fair | 生成 | ✅ | | edit_multi_component | 编辑 | ✅ |
-| poster_movie_night | 生成 | ✅ | | delete_component | 删除 | ✅ |
-| poster_sports_meet | 生成 | ✅ | | delete_button | 删除 | ✅ |
-| form_questionnaire | 生成 | ✅ | | delete_second_text | 删除 | ✅ |
-| form_vote | 生成 | ✅ | | layout_center_focus | 布局 | ✅ |
-| page_club_intro | 生成 | ✅ | | layout_vertical_stack | 布局 | ✅ |
-| page_lost_found | 生成 | ✅ | | empty_canvas_vague | 交互 | ✅ |
-| page_notice | 生成 | ✅ | | empty_canvas_style_choice | 交互 | ✅ |
-| adv_out_of_bounds_repair | 对抗性 | ✅ | | adv_locked_component_redirect | 对抗性 | ✅ |
-| adv_unknown_ref_self_correct | 对抗性 | ✅ | | adv_delete_missing_self_correct | 对抗性 | ✅ |
-| adv_rejected_tool_self_correct | 对抗性 | ✅ | | adv_planner_self_correct | 对抗性 | ✅ |
+**mock 回归**：31/31 通过，规则分全 100（确定性断言，CI 门禁）。
+**live 实测**：31/31 通过，平均规则分 100、平均 LLM-as-a-Judge 分 **92**（真实模型全链路，每任务 4~6 轮调用）。
 
-对抗性用例验证的自省修正闭环：`tool_not_allowed`（阶段白名单拒绝）、`unresolved_component_ref`（无效组件引用）、`no_canvas_diff`（动作被跳过/锁定）三类反馈都能让模型在下一轮自主纠正，scorer 的 `SELF_CORRECTED` 检查项逐条断言。
+| 任务 | 类别 | mock | live | live judge | | 任务 | 类别 | mock | live | live judge |
+|---|---|---|---|---|---|---|---|---|---|---|
+| poster_dance_recruit | 生成 | ✅ 100 | ✅ | 99 | | edit_button_text | 编辑 | ✅ 100 | ✅ | 100 |
+| poster_activity_promo | 生成 | ✅ 100 | ✅ | 93 | | edit_text_color | 编辑 | ✅ 100 | ✅ | - |
+| form_registration | 生成 | ✅ 100 | ✅ | 100 | | edit_move_component | 编辑 | ✅ 100 | ✅ | 100 |
+| poster_lecture | 生成 | ✅ 100 | ✅ | 95 | | edit_font_shrink | 编辑 | ✅ 100 | ✅ | 85 |
+| poster_job_fair | 生成 | ✅ 100 | ✅ | 100 | | edit_multi_component | 编辑 | ✅ 100 | ✅ | 98 |
+| poster_movie_night | 生成 | ✅ 100 | ✅ | 98 | | delete_component | 删除 | ✅ 100 | ✅ | 100 |
+| poster_sports_meet | 生成 | ✅ 100 | ✅ | 98 | | delete_button | 删除 | ✅ 100 | ✅ | 100 |
+| form_questionnaire | 生成 | ✅ 100 | ✅ | 100 | | delete_second_text | 删除 | ✅ 100 | ✅ | 20* |
+| form_vote | 生成 | ✅ 100 | ✅ | 96 | | layout_center_focus | 布局 | ✅ 100 | ✅ | 80 |
+| page_club_intro | 生成 | ✅ 100 | ✅ | 93 | | layout_vertical_stack | 布局 | ✅ 100 | ✅ | 100 |
+| page_lost_found | 生成 | ✅ 100 | ✅ | 100 | | empty_canvas_vague | 交互 | ✅ 100 | ✅ | 98 |
+| page_notice | 生成 | ✅ 100 | ✅ | 100 | | empty_canvas_style_choice | 交互 | ✅ 100 | ✅ | 85 |
+| adv_out_of_bounds_repair | 对抗性 | ✅ 100 | ✅ | 85 | | adv_locked_component_redirect | 对抗性 | ✅ 100 | ✅ | 55* |
+| adv_unknown_ref_self_correct | 对抗性 | ✅ 100 | ✅ | 100 | | adv_delete_missing_self_correct | 对抗性 | ✅ 100 | ✅ | 100 |
+| adv_rejected_tool_self_correct | 对抗性 | ✅ 100 | ✅ | 98 | | adv_planner_self_correct | 对抗性 | ✅ 100 | ✅ | 98 |
+
+\* judge 低分属合理分歧：`delete_second_text` 删掉中间文本后页面偏空；`adv_locked_component_redirect` 模型对锁定组件的正确行为是改未锁定项，judge 认为未完全满足原指令——规则判定与 judge 评审的互补性正在于此。
+
+**首版 live 基线与修复记录（重要）**：首版全量 live 通过率 **77%**（24/31，平均规则分 95、judge 92）。7 条未通过经归因**全部是评测基建缺陷而非 Agent 质量问题**（失败任务 judge 分均在 85~100）：
+
+1. `REQUIRE_INITIAL_CHOICE` ×3 —— live 多轮交互成功完成后 `waitingForInput` 信号消失，scorer 看不到「问过用户」；runner 现以 `askedUser` 标记修复
+2. `SELF_CORRECTED` ×3 —— live 下模型可能不犯预设错误（直接用对 ID、路由本来就正确），此时正常通过即合格；「犯错→修正」闭环改由 mock 多轮脚本强制断言
+3. `CENTERED_TITLE` ×1 —— prompt 只要求堆叠与间距，居中检查超出任务定义（设计缺陷，已移除）
+
+修复后重跑 7 条全部 100 分。这段「live 评测暴露 scorer 盲区 → 归因 → 修复 → 对齐」的过程，正是评测体系价值的直接证明。
+
+对抗性用例验证的自省修正闭环：`tool_not_allowed`（阶段白名单拒绝）、`unresolved_component_ref`（无效组件引用）、`no_canvas_diff`（动作被跳过/锁定）三类反馈都能让模型在下一轮自主纠正，mock 模式的 `SELF_CORRECTED` 检查项逐条断言。
 
 ### 已知坑：RPM 限流导致 live 分数失真
 

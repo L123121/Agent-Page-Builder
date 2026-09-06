@@ -1,8 +1,10 @@
 """工具响应处理 — 解析 LLM 工具调用并转为可执行动作。
 
-三条容错边界（全部走「反馈让模型自纠」而非静默丢弃或直接报错）：
+四条容错边界（全部走「反馈让模型自纠」而非静默丢弃或直接报错）：
 - rejectedTools：调用了当前阶段白名单外的工具；
 - noToolCall：没有调用任何工具（直接输出文本）；
+- invalidArgs：工具参数不符合 Pydantic schema（OpenAI 兼容端点不强制
+  function-calling schema，畸形参数过去会直接崩掉整次请求）；
 - unresolvedRefs：edit_page 引用了画布上不存在的组件。
 
 组件引用解析只接受精确 ID 或精确 label（大小写不敏感）——画布上下文
@@ -12,9 +14,18 @@
 """
 
 from app.utils.id_generator import generate_id
+from pydantic import ValidationError
 
 from .component_utils import auto_layout_components, normalize_component
-from .schemas import AgentState
+from .schemas import (
+    AgentState,
+    AskQuestionArgs,
+    ConfirmPlanArgs,
+    EditPageArgs,
+    FinishArgs,
+    GeneratePageArgs,
+    ProposeOptionsArgs,
+)
 from .stage_routing import next_stage_for_tool
 
 import logging
@@ -25,6 +36,34 @@ logger = logging.getLogger(__name__)
 # 垃圾组件拖垮验证与前端渲染；正常海报/报名页远达不到该量级
 MAX_GENERATED_COMPONENTS = 100
 
+# 工具名 → 参数模型（schema 校验与 definition 生成共用同一份 Pydantic 模型）
+_TOOL_ARGS_MODELS = {
+    "ask_question": AskQuestionArgs,
+    "propose_options": ProposeOptionsArgs,
+    "confirm_plan": ConfirmPlanArgs,
+    "generate_page": GeneratePageArgs,
+    "edit_page": EditPageArgs,
+    "finish": FinishArgs,
+}
+
+
+def _validate_tool_args(name: str, args) -> tuple[dict | None, dict | None]:
+    """校验工具参数。返回 (规范化参数, 错误信息)；二者互斥。
+
+    exclude_unset 保留「字段未提供」语义（如 move 操作未带 top 时不强加 0）。
+    """
+    model = _TOOL_ARGS_MODELS.get(name)
+    if model is None:
+        return (args if isinstance(args, dict) else {}, None)
+    try:
+        return (model.model_validate(args).model_dump(exclude_unset=True), None)
+    except ValidationError as error:
+        errors = [
+            f"{'.'.join(str(part) for part in item['loc']) or 'args'}: {item['msg']}"
+            for item in error.errors()[:5]
+        ]
+        return (None, {"tool": name, "errors": errors})
+
 
 def process_tool_response(response, state: AgentState) -> dict:
     """只执行第一个合法工具调用，杜绝跨阶段动作被合并。
@@ -32,6 +71,7 @@ def process_tool_response(response, state: AgentState) -> dict:
     返回结构含 rejectedTools：记录被阶段白名单拒绝的工具名，
     供上层把失败原因注入下一轮 prompt 自省修正。
     noToolCall：模型未调用任何工具（直接输出文本），同样需要自省修正。
+    invalidArgs：工具参数不符合 schema（见 _validate_tool_args）。
     unresolvedRefs：edit_page 中无法解析的组件引用（见 resolve_component_reference）。
     """
     result: dict = {"reply": "", "actions": [], "rejectedTools": []}
@@ -45,7 +85,7 @@ def process_tool_response(response, state: AgentState) -> dict:
         }
 
     for tc in response.tool_calls:
-        args = tc.get("args", {}) if isinstance(tc, dict) else tc.args
+        raw_args = tc.get("args", {}) if isinstance(tc, dict) else tc.args
         name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "")
         if name not in state["allowed_tools"]:
             logger.warning("[AI] ignored tool outside stage: stage=%s tool=%s", state["stage"], name)
@@ -53,6 +93,11 @@ def process_tool_response(response, state: AgentState) -> dict:
             continue
         handler = _TOOL_HANDLERS.get(name)
         if handler:
+            args, args_error = _validate_tool_args(name, raw_args)
+            if args_error:
+                logger.warning("[AI] invalid tool args: tool=%s errors=%s", name, args_error["errors"])
+                result["invalidArgs"] = args_error
+                return result
             handler(args, state, result)
             result["nextStage"] = next_stage_for_tool(name, state["stage"])
             return result

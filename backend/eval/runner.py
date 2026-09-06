@@ -19,7 +19,7 @@ import sys
 import time
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 from unittest.mock import AsyncMock, patch
 
 # 允许从 backend/ 目录直接执行 python -m eval.runner
@@ -27,11 +27,11 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from app.config import settings  # noqa: E402 — mock 交互需绕过 AI_API_KEY 检查
 from app.database import Base, engine  # noqa: E402 — live 运行日志需要 agent_runs 表
 from app.models.agent_run import AgentRun as _AgentRun  # noqa: E402,F401 — 注册表模型
-from app.services.ai.agent import executor_node, planner_node, run_agent  # noqa: E402
+from app.services.ai.agent import executor_node, run_agent  # noqa: E402
 from app.services.ai.canvas_runtime import apply_actions_to_canvas  # noqa: E402
-from app.services.ai.component_utils import normalize_component  # noqa: E402
 
 from .scorer import EvalRunResult, score_run  # noqa: E402
 from .tasks import EvalTask, get_eval_tasks  # noqa: E402
@@ -355,30 +355,60 @@ def _assemble_steps(trace: list) -> list:
     return steps
 
 
-async def run_mock(task: EvalTask) -> EvalRunResult:
-    """mock 模式：脚本化 LLM 驱动 executor（执行类）或 planner（交互类）"""
-    start = time.monotonic()
-    expected = task.get("expected") or {}
+async def _run_mock_interaction(task: EvalTask, start: float) -> EvalRunResult:
+    """交互类任务：驱动真实图（route → planner ⇄ await_user），脚本化 LLM + 自动用户回复。
+
+    LLM 脚本按决策次数顺序消费；脚本耗尽时 planner 内部捕获异常走本地降级
+    （与真实运行在模型不可用时的行为一致）。
+    """
+    canvas_style = task.get("canvasStyle") or {}
+    cw = int(canvas_style.get("width") or 375)
+    ch = int(canvas_style.get("height") or 667)
+    script = _mock_response_sequence(task, {})
+    thread_id = f"eval-mock-{task.get('id', 'task')}"
+    trace_all: list = []
+    asked_user = False
+    last_result: dict = {}
 
     try:
-        if expected.get("requireInitialChoice"):
-            # 交互类：走 planner，mock interrupt 捕获方向确认
-            state = _build_state(task, stage="discover")
-            state["allowed_tools"] = ["propose_options", "ask_question"]
-            captured = {}
+        with patch.object(settings, "AI_API_KEY", "mock-key"), \
+             patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(side_effect=list(script))), \
+             patch("app.services.ai.agent.log_agent_run"):
+            result = await run_agent(
+                prompt=task.get("prompt", ""),
+                history=[],
+                components=deepcopy(task.get("initialCanvas") or []),
+                canvas_style=deepcopy(canvas_style),
+                canvas_width=cw,
+                canvas_height=ch,
+                selected_component_ids=[],
+                viewport={"width": cw, "height": ch, "scale": 100},
+                project_knowledge="",
+                conversation_stage=None,
+                thread_id=thread_id,
+            )
+            last_result = result
+            trace_all.extend(result.get("trace", []))
+            asked_user = bool(result.get("waitingForInput"))
 
-            def fake_interrupt(payload):
-                captured["payload"] = payload
-                return "我选择「宣传海报」"
+            # interrupt 挂起时自动回复并恢复（options → plan → suggestions）
+            for _round in range(10):
+                if not result.get("waitingForInput"):
+                    break
+                asked_user = True
+                resume_value = _auto_resume(result)
+                if resume_value is None:
+                    break
+                result = await run_agent(
+                    prompt=resume_value,
+                    thread_id=result.get("threadId") or thread_id,
+                    resume=resume_value,
+                )
+                last_result = result
+                trace_all.extend(result.get("trace", []))
 
-            with patch("app.services.ai.agent_nodes.interrupt", side_effect=fake_interrupt), \
-                 patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(side_effect=_mock_response_sequence(task, state))):
-                result = await planner_node(state)
-
-            plan = result.get("plan")
-            trace = result.get("result", {}).get("trace", [])
-            steps = _assemble_steps(trace)
-            waiting = bool(captured.get("payload"))
+        if last_result.get("waitingForInput"):
+            # 轮次耗尽仍未生成：把最后挂起的信息作为证据返回
             return {
                 "taskId": task.get("id", ""),
                 "taskName": task.get("name", ""),
@@ -386,17 +416,76 @@ async def run_mock(task: EvalTask) -> EvalRunResult:
                 "score": 0,
                 "failures": [],
                 "passedChecks": [],
-                "finalCanvas": [],
-                "canvasStyle": task.get("canvasStyle") or {},
-                "steps": steps,
-                "trace": trace,
-                "plan": plan,
-                "nextStage": result.get("result", {}).get("nextStage") or "discover",
-                "waitingForInput": waiting,
+                "finalCanvas": deepcopy(task.get("initialCanvas") or []),
+                "canvasStyle": canvas_style,
+                "steps": [],
+                "trace": trace_all,
+                "plan": last_result.get("plan"),
+                "nextStage": last_result.get("nextStage"),
+                "waitingForInput": True,
+                "askedUser": True,
                 "durationMs": int((time.monotonic() - start) * 1000),
                 "tokenUsage": None,
                 "provider": "mock",
             }
+
+        actions = last_result.get("actions", [])
+        final_canvas, final_style, _ = apply_actions_to_canvas(
+            deepcopy(task.get("initialCanvas") or []),
+            deepcopy(canvas_style),
+            actions,
+        )
+        return {
+            "taskId": task.get("id", ""),
+            "taskName": task.get("name", ""),
+            "pass": False,
+            "score": 0,
+            "failures": [],
+            "passedChecks": [],
+            "finalCanvas": final_canvas,
+            "canvasStyle": final_style,
+            "steps": _assemble_steps(trace_all),
+            "trace": trace_all,
+            "plan": last_result.get("plan"),
+            "nextStage": last_result.get("nextStage"),
+            "askedUser": asked_user,
+            "durationMs": int((time.monotonic() - start) * 1000),
+            "tokenUsage": None,
+            "provider": "mock",
+        }
+    except Exception as error:  # 运行异常：交给 scorer 判 RUN_ERROR
+        logger.warning("mock interaction run failed for %s: %s", task.get("id"), error)
+        return {
+            "taskId": task.get("id", ""),
+            "taskName": task.get("name", ""),
+            "pass": False,
+            "score": 0,
+            "failures": [],
+            "passedChecks": [],
+            "finalCanvas": [],
+            "canvasStyle": canvas_style,
+            "steps": [],
+            "trace": trace_all,
+            "plan": None,
+            "nextStage": None,
+            "durationMs": int((time.monotonic() - start) * 1000),
+            "tokenUsage": None,
+            "provider": "mock",
+            "error": str(error),
+        }
+
+
+async def run_mock(task: EvalTask) -> EvalRunResult:
+    """mock 模式：脚本化 LLM 驱动真实图（交互类）或 executor 节点（执行类）"""
+    start = time.monotonic()
+    expected = task.get("expected") or {}
+
+    try:
+        if expected.get("requireInitialChoice"):
+            # 交互类：驱动真实图（route → planner ⇄ await_user）+ 自动用户回复，
+            # 与 live 模式同一驱动方式，mock 也覆盖图装配、interrupt 挂起/恢复
+            # 协议与结果提取，而不是只测 planner 节点内部循环
+            return await _run_mock_interaction(task, start)
 
         # 执行类：走 executor，mock LLM 按脚本序列响应（支持多轮对抗性用例）。
         # 画布非空默认 edit 阶段（与真实路由一致）；对抗性任务可用 mockStage 覆盖。

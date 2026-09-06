@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from app.services.ai.agent import (
+    await_user_node,
     executor_node,
     next_stage_for_tool,
     planner_node,
@@ -200,7 +201,11 @@ class AgentLoopTests(unittest.IsolatedAsyncioTestCase):
 
 
 class AgentSelfCorrectionTests(unittest.IsolatedAsyncioTestCase):
-    """覆盖多 Agent 分工（planner 产出方案 / executor 注入方案）与失败自省修正。"""
+    """覆盖多 Agent 分工（planner 产出方案 / executor 注入方案）与失败自省修正。
+
+    planner 不再在节点内 interrupt：需要用户输入时返回 pending_input，
+    由独立的 await_user 节点挂起（保证恢复时不重放 planner 的 LLM 调用）。
+    """
 
     def _planner_state(self, stage: str = "discover") -> dict:
         return {
@@ -218,28 +223,70 @@ class AgentSelfCorrectionTests(unittest.IsolatedAsyncioTestCase):
             "allowed_tools": TOOLS_BY_STAGE[stage],
             "result": {"reply": "", "actions": []},
             "plan": None,
+            "pending_input": None,
+            "interrupt_rounds": 0,
         }
 
     async def test_planner_rejects_out_of_stage_tool_and_retries(self):
-        """planner 阶段工具被拒 → 注入反馈自省修正，不再直接返回错误。"""
+        """planner 阶段工具被拒 → 节点内注入反馈自省修正后产出挂起载荷。"""
         state = self._planner_state("discover")
         responses = [
             Response(ToolCall("confirm_plan", {"summary": "方案", "details": ["a"]})),
             Response(ToolCall("propose_options", {
                 "reply": "选择方向",
-                "options": [{"id": "poster", "title": "海报", "description": "x"}],
+                "options": [
+                    {"id": "poster", "title": "海报", "description": "x"},
+                    {"id": "form", "title": "表单", "description": "y"},
+                ],
+            })),
+        ]
+        with patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(side_effect=responses)):
+            result = await planner_node(state)
+        # 第一轮 confirm_plan 被拒（节点内修正），第二轮产出选项 → pending_input 交 await_user
+        pending = result.get("pending_input")
+        self.assertTrue(pending)
+        self.assertEqual(pending["nextStage"], "design")
+        self.assertEqual(pending["payload"]["options"][0]["id"], "poster")
+
+    async def test_planner_does_not_invoke_interrupt(self):
+        """planner 节点内不再调用 interrupt（interrupt 隔离在 await_user 节点）。"""
+        state = self._planner_state("discover")
+        responses = [
+            Response(ToolCall("propose_options", {
+                "reply": "选择方向",
+                "options": [
+                    {"id": "poster", "title": "海报", "description": "x"},
+                    {"id": "form", "title": "表单", "description": "y"},
+                ],
             })),
         ]
         with patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(side_effect=responses)), \
-             patch("app.services.ai.agent_nodes.interrupt", return_value="我选择「海报」") as mock_interrupt:
+             patch("app.services.ai.agent_nodes.interrupt") as mock_interrupt:
             result = await planner_node(state)
-        # 第一轮 confirm_plan 被拒，第二轮 propose_options 触发 interrupt 挂起
+        self.assertFalse(mock_interrupt.called)
+        self.assertTrue(result.get("pending_input"))
+
+    async def test_await_user_applies_choice_and_advances_stage(self):
+        """await_user 挂起恢复后：用户选择入消息、阶段推进、挂起载荷清空。"""
+        state = self._planner_state("discover")
+        state["pending_input"] = {
+            "type": "user_input",
+            "stage": "discover",
+            "nextStage": "design",
+            "payload": {"reply": "请选择页面方向"},
+        }
+        with patch("app.services.ai.agent_nodes.interrupt", return_value="我选择「海报」") as mock_interrupt:
+            result = await await_user_node(state)
         self.assertTrue(mock_interrupt.called)
-        payload = mock_interrupt.call_args[0][0]["payload"]
-        self.assertEqual(payload["options"][0]["id"], "poster")
+        self.assertIsNone(result["pending_input"])
+        self.assertEqual(result["stage"], "design")
+        self.assertEqual(result["allowed_tools"], TOOLS_BY_STAGE["design"])
+        self.assertEqual(result["interrupt_rounds"], 1)
+        self.assertEqual(result["messages"][-1], {"role": "user", "content": "我选择「海报」"})
+        self.assertEqual(result["messages"][-2], {"role": "assistant", "content": "请选择页面方向"})
 
     async def test_planner_confirm_plan_writes_plan_to_state(self):
-        """confirm_plan 产出的方案写入 state，供 executor 注入。"""
+        """confirm_plan 产出的方案随 pending_input 写入 state，跨 interrupt 持久。"""
         state = self._planner_state("plan")
         responses = [
             Response(ToolCall("confirm_plan", {
@@ -247,11 +294,127 @@ class AgentSelfCorrectionTests(unittest.IsolatedAsyncioTestCase):
                 "details": ["大标题", "动感配色", "报名入口"],
             })),
         ]
-        with patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(return_value=responses[0])), \
-             patch("app.services.ai.agent_nodes.interrupt", return_value="确认，请生成"):
+        with patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(side_effect=responses)):
             result = await planner_node(state)
+        self.assertTrue(result["pending_input"])
         self.assertEqual(result["plan"]["summary"], "深色潮流海报")
         self.assertEqual(len(result["plan"]["details"]), 3)
+
+    async def test_planner_corrects_invalid_tool_args(self):
+        """工具参数不符合 schema → invalidArgs 触发节点内修正，第二轮正常产出。"""
+        state = self._planner_state("discover")
+        responses = [
+            Response(ToolCall("propose_options", {"reply": "选一个", "options": [{"id": "x"}]})),
+            Response(ToolCall("propose_options", {
+                "reply": "选择方向",
+                "options": [
+                    {"id": "poster", "title": "海报", "description": "x"},
+                    {"id": "form", "title": "表单", "description": "y"},
+                ],
+            })),
+        ]
+        with patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(side_effect=responses)):
+            result = await planner_node(state)
+        # 第一轮 options 缺 title/description（参数非法）→ 修正后第二轮产出挂起载荷
+        pending = result.get("pending_input")
+        self.assertTrue(pending)
+        self.assertEqual(len(pending["payload"]["options"]), 2)
+
+    async def test_planner_discards_partial_actions_on_unresolved_refs(self):
+        """unresolvedRefs 与部分有效动作并存 → 整批废弃重提交（与 executor 原子性一致）。
+
+        旧实现放行部分动作且 unresolvedRefs 被响应模型剥离：错误被静默吞掉，
+        模型永远得不到纠正反馈，「改对一半」直接生效。
+        """
+        state = self._planner_state("confirm")
+        state["components"] = [{
+            "id": "title-1",
+            "component": "VText",
+            "label": "标题",
+            "propValue": "旧标题",
+            "style": {"width": 300, "height": 40, "top": 20, "left": 20, "fontSize": 24},
+        }]
+        responses = [
+            Response(ToolCall("edit_page", {
+                "reply": "改标题",
+                "operations": [
+                    {"type": "modify", "id": "ghost", "propValue": "x"},
+                    {"type": "modify", "id": "标题", "propValue": "第一版"},
+                ],
+            })),
+            Response(ToolCall("edit_page", {
+                "reply": "改好了",
+                "operations": [
+                    {"type": "modify", "id": "title-1", "propValue": "最终标题"},
+                ],
+            })),
+        ]
+        with patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(side_effect=responses)):
+            result = await planner_node(state)
+        # 第一轮的「标题→第一版」被整批废弃，只有第二轮的干净操作生效
+        modifies = [a for a in result["result"]["actions"] if a["type"] == "modify"]
+        self.assertEqual(len(modifies), 1)
+        self.assertEqual(modifies[0]["id"], "title-1")
+        self.assertEqual(modifies[0]["propValue"], "最终标题")
+
+    async def test_planner_keeps_production_when_rejected_tool_is_ancillary(self):
+        """白名单外工具只是旁支尝试：已有有效产出时以产出为准，不触发修正。"""
+        state = self._planner_state("confirm")
+        state["components"] = [{
+            "id": "title-1",
+            "component": "VText",
+            "label": "标题",
+            "propValue": "旧标题",
+            "style": {"width": 300, "height": 40, "top": 20, "left": 20, "fontSize": 24},
+        }]
+        responses = [
+            Response(
+                ToolCall("propose_options", {"reply": "旁支", "options": [
+                    {"id": "a", "title": "甲", "description": "x"},
+                    {"id": "b", "title": "乙", "description": "y"},
+                ]}),
+                ToolCall("edit_page", {
+                    "reply": "已修改",
+                    "operations": [{"type": "modify", "id": "title-1", "propValue": "新标题"}],
+                }),
+            ),
+        ]
+        with patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(side_effect=responses)):
+            result = await planner_node(state)
+        self.assertEqual(result["result"]["actions"][0]["propValue"], "新标题")
+        self.assertNotIn("pending_input", result)
+
+    async def test_executor_corrects_no_tool_call_response(self):
+        """executor 阶段模型未调用工具 → 反馈注入下一轮，不再直接放弃。"""
+        state = self._planner_state("edit")
+        state["components"] = [{
+            "id": "title_1",
+            "component": "VText",
+            "label": "主标题",
+            "propValue": "旧标题",
+            "style": {"width": 300, "height": 40, "top": 20, "left": 20, "fontSize": 24, "color": "#111111"},
+            "zIndex": 10,
+        }]
+        state["allowed_tools"] = TOOLS_BY_STAGE["edit"]
+
+        class TextOnlyResponse:
+            content = "我觉得现在的标题就挺好"
+            tool_calls = []
+
+        responses = [
+            TextOnlyResponse(),
+            Response(ToolCall("edit_page", {
+                "reply": "已修改标题",
+                "operations": [{"type": "modify", "id": "title_1", "propValue": "新标题"}],
+            })),
+        ]
+        with patch("app.services.ai.agent_nodes._invoke_llm", new=AsyncMock(side_effect=responses)):
+            result = await executor_node(state)
+        payload = result["result"]
+        corrections = [entry for entry in payload["trace"] if entry.get("type") == "correction"]
+        self.assertEqual(len(corrections), 1)
+        self.assertEqual(corrections[0]["error"], "no_tool_call")
+        self.assertEqual(payload["actions"][0]["propValue"], "新标题")
 
     async def test_executor_injects_confirmed_plan_into_prompt(self):
         """executor 执行阶段把 planner 的方案注入系统提示词。"""
@@ -311,6 +474,41 @@ class AgentSelfCorrectionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("propose_options", result["rejectedTools"])
         # 后续合法的 edit_page 仍被正常执行
         self.assertEqual(result["actions"][0]["type"], "add")
+
+
+class LLMRetryTests(unittest.TestCase):
+    """LLM 调用重试策略：429 尊重 Retry-After，鉴权/额度错误快速失败。"""
+
+    def _error_with_retry_after(self, value):
+        class FakeResponse:
+            headers = {"retry-after": value} if value is not None else {}
+
+        class FakeError(Exception):
+            response = FakeResponse()
+
+        return FakeError("429 rate_limited")
+
+    def test_429_uses_retry_after_header(self):
+        from app.services.ai import agent_nodes
+        delay = agent_nodes._retry_delay_seconds(self._error_with_retry_after("17"), attempt=0)
+        self.assertEqual(delay, 17.0)
+
+    def test_429_retry_after_is_capped(self):
+        from app.services.ai import agent_nodes
+        delay = agent_nodes._retry_delay_seconds(self._error_with_retry_after("999"), attempt=0)
+        self.assertEqual(delay, agent_nodes.RETRY_AFTER_CAP_SECONDS)
+
+    def test_429_without_header_falls_back_to_backoff(self):
+        from app.services.ai import agent_nodes
+        delay = agent_nodes._retry_delay_seconds(self._error_with_retry_after(None), attempt=2)
+        self.assertEqual(delay, float(agent_nodes.RETRY_BACKOFF_BASE ** 2))
+
+    def test_auth_and_quota_errors_fail_fast(self):
+        from app.services.ai import agent_nodes
+        self.assertTrue(agent_nodes._is_non_retryable_llm_error(Exception("Error code: 401 - invalid api key")))
+        self.assertTrue(agent_nodes._is_non_retryable_llm_error(Exception("402 quota_exceeded")))
+        self.assertFalse(agent_nodes._is_non_retryable_llm_error(Exception("500 internal server error")))
+        self.assertFalse(agent_nodes._is_non_retryable_llm_error(Exception("429 rate_limited")))
 
 
 class FallbackAgentTests(unittest.TestCase):

@@ -205,6 +205,57 @@ class AgentStreamingTests(unittest.TestCase):
         # resume 后 planner 从 design 阶段继续（discover → design → ...）
         self.assertEqual(second_done["result"]["nextStage"], "plan")
 
+    def test_resume_does_not_replay_planner_llm_call(self):
+        """interrupt 恢复不得重放 planner 的 LLM 调用。
+
+        planner 的 LLM 决策被隔离在无副作用的 await_user 节点之外：
+        首轮 1 次调用，恢复后只触发下一轮决策（共 2 次）。
+        旧实现把 interrupt 放在 planner 内部，恢复会从头重执行节点，
+        LLM 调用被重放（共 3 次：重放 + 下一轮决策）。
+        """
+        thread_id = "replay-count-test"
+        calls = {"n": 0}
+
+        async def counting_invoke(_messages, _tools=None, **_kwargs):
+            calls["n"] += 1
+            return make_options_response()
+
+        async def scenario():
+            with patch("app.services.ai.agent_nodes._invoke_llm", side_effect=counting_invoke):
+                await collect_stream(prompt="做个海报", thread_id=thread_id)
+                calls_after_first = calls["n"]
+                await collect_stream(
+                    prompt="我选择「海报」",
+                    thread_id=thread_id,
+                    resume="我选择「海报」",
+                )
+            return calls_after_first
+
+        calls_after_first = asyncio.run(scenario())
+        self.assertEqual(calls_after_first, 1, "首轮应只有 planner 一次 LLM 决策")
+        self.assertEqual(calls["n"], 2, "resume 恢复不应重放已完成的 LLM 调用")
+
+    def test_executor_streams_tool_events_live_before_done(self):
+        """executor 的 tool_call / tool_result 应经 custom 流实时推送（在 agent_done 之前）。"""
+        thread_id = "live-events-test"
+
+        async def scenario():
+            with self._invoke_llm_mock(make_generate_response()):
+                return await collect_stream(
+                    prompt="确认，请生成",
+                    conversation_stage="execute",
+                    thread_id=thread_id,
+                )
+
+        events = asyncio.run(scenario())
+        types = [e["type"] for e in events]
+        # 实时事件必须先于 agent_done 到达（旧实现是节点结束后回放，与 done 几乎同时）
+        self.assertLess(types.index("tool_call"), types.index("agent_done"))
+        self.assertLess(types.index("tool_result"), types.index("agent_done"))
+        # 不得重复推送（custom 实时 + trace 回放各一次）
+        self.assertEqual(types.count("tool_call"), 1)
+        self.assertEqual(types.count("tool_result"), 1)
+
     def test_resume_falls_back_to_fresh_run_without_checkpoint(self):
         async def scenario():
             # 从未在该 thread 上执行过：resume 应安全降级为新请求
@@ -323,8 +374,123 @@ class StreamRouterTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
 
-if __name__ == "__main__":
-    unittest.main()
+# ==================== redis checkpointer 后端 ====================
+
+try:
+    from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+    HAS_REDIS_SAVER = True
+except ImportError:
+    HAS_REDIS_SAVER = False
+
+
+@unittest.skipUnless(HAS_REDIS_SAVER, "langgraph-checkpoint-redis 未安装")
+class RedisCheckpointerTests(unittest.TestCase):
+    """AI_CHECKPOINT_BACKEND=redis：AsyncRedisSaver 构建与一次性初始化。
+
+    官方库的三个坑（见 graph._build_checkpointer 注释）：from_conn_string 是
+    上下文管理器、sync saver 无 aput、asetup 需要事件循环——回归测试逐一锁定。
+    """
+
+    def test_build_checkpointer_returns_async_saver_with_ttl(self):
+        from app.services.ai import graph as graph_module
+        with patch.object(graph_module.settings, "AI_CHECKPOINT_BACKEND", "redis"), \
+             patch.object(graph_module.settings, "AI_THREAD_TTL_SECONDS", 3600):
+            saver = graph_module._build_checkpointer()
+        self.assertIsInstance(saver, AsyncRedisSaver)
+        # 线程 TTL 透传为 redis default_ttl（单位分钟），跨进程也能自动过期
+        self.assertEqual(saver.ttl_config, {"default_ttl": 60})
+
+    def test_build_checkpointer_falls_back_without_dependency(self):
+        from app.services.ai import graph as graph_module
+        with patch.dict("sys.modules", {"langgraph.checkpoint.redis.aio": None}), \
+             patch.object(graph_module.settings, "AI_CHECKPOINT_BACKEND", "redis"):
+            saver = graph_module._build_checkpointer()
+        self.assertIsInstance(saver, TTLMemorySaver)
+
+    def test_ensure_checkpointer_ready_runs_asetup_once(self):
+        from types import SimpleNamespace
+        from app.services.ai import graph as graph_module
+
+        class FakeSaver:
+            def __init__(self):
+                self.setup_calls = 0
+                self.info_calls = 0
+
+            async def asetup(self):
+                self.setup_calls += 1
+
+            async def aset_client_info(self):
+                self.info_calls += 1
+
+        fake_graph = SimpleNamespace(checkpointer=FakeSaver())
+        with patch.object(graph_module, "agent_graph", fake_graph), \
+             patch.object(graph_module, "_checkpointer_setup_done", set()):
+            asyncio.run(graph_module.ensure_checkpointer_ready())
+            asyncio.run(graph_module.ensure_checkpointer_ready())
+        self.assertEqual(fake_graph.checkpointer.setup_calls, 1)
+        self.assertEqual(fake_graph.checkpointer.info_calls, 1)
+
+    def test_ensure_checkpointer_ready_noop_for_memory_backend(self):
+        from app.services.ai import graph as graph_module
+        # 真实 agent_graph（memory 后端）没有 asetup：直接跳过，不抛错
+        asyncio.run(graph_module.ensure_checkpointer_ready())
+
+
+# ==================== SSE 心跳 ====================
+
+class SseKeepaliveTests(unittest.IsolatedAsyncioTestCase):
+    """SSE 空闲心跳：LLM 长调用静默期插入注释行，防止代理层空闲超时断连。"""
+
+    async def test_inserts_keepalive_between_idle_events(self):
+        from app.routers.ai import with_sse_keepalive
+
+        async def slow_events():
+            yield {"type": "agent_start"}
+            await asyncio.sleep(0.12)
+            yield {"type": "agent_done"}
+
+        chunks = []
+        async for chunk in with_sse_keepalive(slow_events(), interval=0.03):
+            chunks.append(chunk)
+        data_chunks = [c for c in chunks if c.startswith("data: ")]
+        keepalives = [c for c in chunks if c.startswith(": keepalive")]
+        self.assertEqual(len(data_chunks), 2)
+        self.assertIn('"agent_start"', data_chunks[0])
+        self.assertIn('"agent_done"', data_chunks[1])
+        self.assertGreaterEqual(len(keepalives), 2)
+
+    async def test_producer_exception_propagates_for_agent_error(self):
+        from app.routers.ai import with_sse_keepalive
+
+        async def failing_events():
+            yield {"type": "agent_start"}
+            raise RuntimeError("boom")
+
+        chunks = []
+        with self.assertRaises(RuntimeError):
+            async for chunk in with_sse_keepalive(failing_events(), interval=0.01):
+                chunks.append(chunk)
+        self.assertEqual(len(chunks), 1)
+
+    async def test_early_disconnect_cancels_producer(self):
+        from app.routers.ai import with_sse_keepalive
+
+        producer_done = asyncio.Event()
+
+        async def endless_events():
+            try:
+                while True:
+                    yield {"type": "tick"}
+                    await asyncio.sleep(0.01)
+            finally:
+                producer_done.set()
+
+        agen = with_sse_keepalive(endless_events(), interval=0.01)
+        first = await agen.__anext__()
+        self.assertIn("tick", first)
+        await agen.aclose()
+        # 客户端断开（aclose）后上游生成器必须被取消，不能泄漏后台任务
+        await asyncio.wait_for(producer_done.wait(), timeout=2)
 
 
 class TTLMemorySaverTests(unittest.TestCase):

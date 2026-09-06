@@ -102,8 +102,11 @@ POST /api/auth/refresh    # 刷新（轮换双 token）
 - **AI Agent**：LangGraph 阶段路由 + 工具白名单；生成和编辑阶段采用“观察 → 单工具执行 → 确定性验证 → 自动修复 → 再验证”的有限闭环
 - **画布环境上下文**：Agent 可读取现有组件、锁定与层级状态、选中组件、框选结果、视口尺寸和项目知识
 - **安全执行**：工具先在隔离画布快照中运行，通过越界、重叠、文本溢出、内容完整性和颜色对比度检查后才生成最终差异
-- **流式会话（SSE）**：`/api/ai/chat/stream` 以 `stream_mode="updates"` 逐节点推送 `agent_start / tool_call / tool_result / self_correction / agent_done / agent_error`；planner 等待用户输入（选项/提问/方案确认）时经 interrupt 挂起，服务端把挂起载荷合成为带 `waitingForInput=true` 的 `agent_done`，前端凭 `threadId + resume` 恢复图执行（checkpoint 丢失自动降级为新请求）
-- **会话状态治理**：进程内 checkpointer 带 TTL 与容量上限（`AI_THREAD_TTL_SECONDS` / `AI_CHECKPOINT_MAX_THREADS`），按最近活跃淘汰线程，防长期运行内存无限增长；LLM 温度/输出上限/请求超时可配（`AI_TEMPERATURE` / `AI_MAX_TOKENS` / `AI_REQUEST_TIMEOUT`）
+- **流式会话（SSE）**：`/api/ai/chat/stream` 双通道推送——`custom` 通道实时输出 executor 闭环每步的 `tool_call / tool_result / self_correction`（闭环可能持续数分钟，不必等节点跑完才见进度），`updates` 通道产出 `agent_start / agent_done / agent_error`；planner 等待用户输入（选项/提问/方案确认）时经 interrupt 挂起，服务端把挂起载荷合成为带 `waitingForInput=true` 的 `agent_done`，前端凭 `threadId + resume` 恢复图执行（checkpoint 丢失自动降级为新请求）
+- **Human-in-the-loop 图结构**：interrupt 隔离在无副作用的 `await_user` 节点（planner ⇄ await_user 循环）。LangGraph 的恢复语义是“从头重执行被中断的节点”——旧实现把 interrupt 放在 planner 内部，每次用户交互恢复都会重放一次已完成的 LLM 调用（成本翻倍，且重放结果与用户点击不一致时用户输入会被静默丢弃）；现在恢复只重放零成本的 await_user，LLM 决策恰好调用一次
+- **工具参数校验**：LLM 供应商不强制 function-calling schema，畸形工具参数过去会直接崩掉整次请求；现在统一经 Pydantic 校验，违规转为 `invalid_tool_args` 反馈进自省修正闭环（修正触发源共 5 类：阶段白名单拒绝、未调用工具、参数非法、组件引用无法解析、动作无画布差异；反馈消息按 OpenAI 协议用真实 tool_call_id 逐个应答，避免下一轮 400）
+- **限流自适应重试**：LLM 调用 429 时优先尊重 `Retry-After` 响应头（封顶防挂死），指数退避兜底；401/402（鉴权/额度耗尽）不重试、快速失败走本地降级
+- **会话状态治理**：进程内 checkpointer 带 TTL 与容量上限（`AI_THREAD_TTL_SECONDS` / `AI_CHECKPOINT_MAX_THREADS`），按最近活跃淘汰线程（活跃时间在写入时解析缓存，淘汰扫描不再全量反序列化 checkpoint），防长期运行内存无限增长与扫描 CPU 尖峰；LLM 温度/输出上限/请求超时可配（`AI_TEMPERATURE` / `AI_MAX_TOKENS` / `AI_REQUEST_TIMEOUT`）
 - **请求护栏**：AI 请求的 prompt/历史/画布组件/图片大小均有上限（超限 422），单次生成组件数封顶，防病态输入拖垮 Agent 闭环与 O(n²) 自动布局
 
 ## Agent 评测（Eval）
@@ -197,6 +200,11 @@ LLM 调用失败后走本地 fallback 返回空画布，导致生成类任务分
 1. live 模式加 `--delay`（默认 7s，可调大）在任务间避让限流窗口；
 2. 分任务单独跑（`--task` 单任务不受限流影响）；
 3. 平台充值/升级额度后 RPM 上限提高，全量评测即稳定。
+
+Agent 运行时侧也有缓解：LLM 调用 429 时自动尊重 `Retry-After` 响应头等待重试
+（而非固定 1s/2s 退避后放弃），限流窗口内的请求大概率自恢复；401/402 不重试。
+另外 planner 的 interrupt 隔离在无副作用的 await_user 节点后，每轮用户交互
+只调用一次 LLM（旧实现恢复时会重放一次），planner 交互链路的调用量直接减半。
 
 ### Token 预算控制（防 TPM 限流）
 

@@ -75,7 +75,7 @@ class ConfirmPlanArgs(BaseModel):
 class GeneratePageArgs(BaseModel):
     reply: str
     canvasStyle: dict
-    components: list
+    components: List[dict]
 
 
 class EditOperation(BaseModel):
@@ -119,6 +119,12 @@ class AgentState(TypedDict):
     result: dict
     # 需求分析 Agent（planner）确认后的设计方案，供执行 Agent（executor）注入上下文
     plan: Optional[dict]
+    # planner 等待用户输入时的挂起载荷；由独立的 await_user 节点据此 interrupt 并应用
+    # 用户选择（节点恢复语义是「从头重执行」，把 interrupt 隔离在无副作用的节点里，
+    # 恢复时才不会重放 planner 已完成的 LLM 调用）
+    pending_input: Optional[dict]
+    # 当前图执行内已完成的用户交互轮数（防无限选择循环）
+    interrupt_rounds: int
 
 
 # ==================== 动作输出 ====================

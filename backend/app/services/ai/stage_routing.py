@@ -12,7 +12,6 @@
 """
 
 from .schemas import AgentStage
-from .tools import TOOLS_BY_STAGE
 
 # 显式指令短语表：key 为目标阶段，value 为触发该阶段的用户原话。
 # 只做「用户显式说出的流程跳转」，不做意图猜测。

@@ -2,8 +2,9 @@
 
 内部按职责拆分：
 - stage_routing    确定性阶段路由（短语表 + 状态机）
-- tool_handlers    工具响应解析、组件引用解析、动作转换
-- agent_nodes      planner / executor 节点（LLM 决策与闭环执行）
+- run_context      请求预处理（非流式/流式共用）
+- tool_handlers    工具响应解析、参数校验、组件引用解析、动作转换
+- agent_nodes      planner / await_user / executor 节点（LLM 决策与闭环执行）
 - graph            LangGraph 组装与 checkpointer
 - agent_streaming  SSE 流式执行
 - validator        确定性画布验证与自动修复
@@ -20,10 +21,11 @@ from langgraph.types import Command
 
 from app.config import settings
 
-from .agent_nodes import executor_node, planner_node  # noqa: F401 (再导出)
+from .agent_nodes import await_user_node, executor_node, planner_node  # noqa: F401 (再导出)
 from .agent_streaming import run_agent_streaming  # noqa: F401 (再导出)
 from .fallback import run_fallback_agent
-from .graph import agent_graph, extract_graph_result, has_pending_interrupt
+from .graph import agent_graph, ensure_checkpointer_ready, extract_graph_result, has_pending_interrupt
+from .run_context import build_graph_config, build_initial_state
 from .run_logger import log_agent_run
 from .stage_routing import next_stage_for_tool, resolve_stage  # noqa: F401 (再导出)
 from .tool_handlers import _gen_id, process_tool_response  # noqa: F401 (再导出)
@@ -59,55 +61,30 @@ async def run_agent(
                 不会重复执行已完成的节点。
     """
 
-    history = history or []
-    components = components or []
-    selected_component_ids = selected_component_ids or []
-    cw = canvas_width or (canvas_style.get("width") if canvas_style else None) or 375
-    ch = canvas_height or (canvas_style.get("height") if canvas_style else None) or 667
-    stage = resolve_stage(prompt, components, conversation_stage)
-
-    messages = list(history)
-    # 全模态消息：图片作为 image_url 块 + 文字一起发给模型
-    if image:
-        messages.append({
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": image}},
-                {"type": "text", "text": prompt},
-            ],
-        })
-    else:
-        messages.append({"role": "user", "content": prompt})
-
-    initial_state: Dict[str, Any] = {
-        "messages": messages,
-        "prompt": prompt,
-        "components": components,
-        "canvas_style": canvas_style or {},
-        "canvas_width": cw,
-        "canvas_height": ch,
-        "selected_component_ids": selected_component_ids,
-        "viewport": viewport or {"width": cw, "height": ch, "scale": (canvas_style or {}).get("scale", 100)},
-        "project_knowledge": project_knowledge,
-        "requested_stage": conversation_stage,
-        "stage": stage,
-        "allowed_tools": TOOLS_BY_STAGE[stage],
-        "result": {"reply": "", "actions": []},
-        "plan": None,
-    }
+    initial_state, stage = build_initial_state(
+        prompt=prompt,
+        image=image,
+        history=history,
+        components=components,
+        canvas_style=canvas_style,
+        canvas_width=canvas_width,
+        canvas_height=canvas_height,
+        selected_component_ids=selected_component_ids,
+        viewport=viewport,
+        project_knowledge=project_knowledge,
+        conversation_stage=conversation_stage,
+    )
 
     if not settings.AI_API_KEY:
         fallback_result = run_fallback_agent(initial_state, "AI_API_KEY is not configured")
         log_agent_run("chat", thread_id, stage, fallback_result, 0, prompt=prompt)
         return fallback_result
 
-    config = {
-        "configurable": {
-            "thread_id": thread_id or f"anon-{_gen_id(8)}",
-        }
-    }
+    config = build_graph_config(thread_id)
     started = time.monotonic()
     try:
+        # redis 后端首次使用前建索引（memory 后端 no-op）；失败走统一错误路径
+        await ensure_checkpointer_ready()
         if resume is not None and await has_pending_interrupt(agent_graph, config):
             # 从上次 interrupt 挂起点继续执行（不重复已完成的节点）；
             # checkpoint 丢失或无挂起点时降级为新请求执行
@@ -137,8 +114,3 @@ async def run_agent(
             prompt=prompt,
         )
         return failure
-
-
-def _extract_result(result: Dict[str, Any], stage: str, config: Dict[str, Any]) -> Dict[str, Any]:
-    """向后兼容别名 — 结果提取已上移 graph.extract_graph_result（流式/非流式共用）。"""
-    return extract_graph_result(result, stage, config["configurable"]["thread_id"])

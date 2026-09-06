@@ -26,7 +26,13 @@ class Settings(BaseSettings):
     AI_REQUEST_TIMEOUT: float = 120.0
     AI_MAX_RETRIES: int = 3
     AI_RETRY_BACKOFF_BASE: int = 2
+    # 429 时优先尊重 Retry-After 响应头，但单次等待封顶，避免请求挂死
+    AI_RETRY_AFTER_CAP_SECONDS: float = 30.0
     AI_MAX_AGENT_STEPS: int = 6
+    # SSE 空闲心跳间隔（秒）：LLM 长调用期间无字节输出时防止代理层空闲超时断连
+    AI_SSE_KEEPALIVE_INTERVAL: float = 15.0
+    # 单次图执行允许的最大用户交互轮数（planner ⇄ await_user）
+    AI_MAX_INTERRUPT_ROUNDS: int = 10
     AI_DEFAULT_CANVAS_WIDTH: int = 375
     AI_DEFAULT_CANVAS_HEIGHT: int = 667
 

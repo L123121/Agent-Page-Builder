@@ -119,10 +119,9 @@ import CanvasAttr from '@/components/CanvasAttr.vue'
 import PropPanelRenderer from '@/custom-component/PropPanelRenderer.vue'
 import { ArrowLeft, ArrowRight, Box, Operation, CollectionTag, Film, Pointer, Clock } from '@element-plus/icons-vue'
 import { useAutoSave } from '@/composables/useAutoSave'
-import { useCommandHistory, restoreCommandHistory } from '@/composables/useCommandHistory'
+import { useCommandHistory } from '@/composables/useCommandHistory'
 import { useDragDrop } from '@/composables/useDragDrop'
 import { usePanelToggle } from '@/composables/usePanelToggle'
-import { validateComponentData, validateCanvasStyle } from '@/utils/validation'
 
 const store = useStore()
 const { curComponent, isClickComponent, rightList, isDarkMode } = storeToRefs(store)
@@ -137,42 +136,7 @@ const { handleDrop, handleDragOver } = useDragDrop()
 const { leftList, isShowLeft, isShowRight } = usePanelToggle()
 
 // ==================== 初始化 ====================
-function restore(): void {
-    const canvasData = localStorage.getItem('canvasData')
-    if (canvasData) {
-        try {
-            const parsed = JSON.parse(canvasData)
-            const result = validateComponentData(parsed)
-            if (result.success && result.data && result.data.length > 0) {
-                store.setComponentData(result.data)
-            } else {
-                console.warn('画布数据校验失败，已忽略:', result.errors)
-            }
-        } catch (e) {
-            console.error('数据解析失败:', e)
-        }
-    }
-
-    const canvasStyle = localStorage.getItem('canvasStyle')
-    if (canvasStyle) {
-        try {
-            const parsed = JSON.parse(canvasStyle)
-            const result = validateCanvasStyle(parsed)
-            if (result.success && result.data) {
-                store.setCanvasStyle(result.data)
-            } else {
-                console.warn('画布样式校验失败，已忽略:', result.errors)
-            }
-        } catch (e) {
-            console.error('画布样式解析失败:', e)
-        }
-    }
-}
-
 onMounted(() => {
-    restore()
-    // 恢复跨会话的命令历史（刷新后仍可 Ctrl+Z）
-    restoreCommandHistory().catch(() => {})
     const cleanup = listenGlobalKeyDown()
     onUnmounted(() => { cleanup() })
 

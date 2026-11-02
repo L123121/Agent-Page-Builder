@@ -52,8 +52,14 @@
                     <el-button :icon="View" size="small" @click="preview(false)">
                         预览
                     </el-button>
-                    <el-button :icon="FolderChecked" size="small" @click="save">
-                        保存
+                    <el-button
+                        :icon="FolderChecked"
+                        :loading="store.isSaving"
+                        :title="saveStatusText"
+                        size="small"
+                        @click="save"
+                    >
+                        {{ saveButtonText }}
                     </el-button>
                     <el-button :icon="Delete" size="small" @click="clearCanvas">
                         清空
@@ -212,7 +218,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useStore } from '@/store'
 import { storeToRefs } from 'pinia'
 import generateID from '@/utils/generateID'
@@ -257,6 +263,18 @@ const { componentData, canvasStyleData, areaData, curComponent, isDarkMode } = s
 
 // 页面管理（后端持久化）
 const { savePage } = usePageManager()
+const saveButtonText = computed(() => {
+    if (store.isSaving) return '保存中'
+    if (store.saveError) return '重试保存'
+    if (!store.currentPageId) return '保存到云端'
+    return store.isDirty() ? '保存' : '已保存'
+})
+const saveStatusText = computed(() => {
+    if (store.saveError) return store.saveError
+    if (store.isSaving) return '正在同步到云端'
+    if (!store.currentPageId) return '本地草稿仅保留在当前浏览器，登录后可保存到云端'
+    return store.isDirty() ? '有尚未同步的修改，将自动保存' : '当前修改已同步到云端'
+})
 
 // AI 面板
 const showAIPanel = ref(false)
@@ -401,8 +419,7 @@ function preview(screenshot: boolean): void {
 }
 
 function save(): void {
-    // 保存到后端（localStorage 仍作为离线兜底，由 useAutoSave 负责）
-    savePage()
+    void savePage()
 }
 
 const isShowPageManager = ref(false)

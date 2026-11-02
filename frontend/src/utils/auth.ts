@@ -39,6 +39,10 @@ export function getAccessToken(): string {
     return authState.accessToken
 }
 
+export function getAuthOwner(): string {
+    return authState.username ? `user:${authState.username}` : 'anonymous'
+}
+
 export function setTokens(tokens: AuthTokens): void {
     authState.accessToken = tokens.accessToken
     authState.refreshToken = tokens.refreshToken
@@ -90,19 +94,22 @@ export function authLogout(): void {
  * 成功返回 true（调用方重试原请求）；失败清空登录态并弹出登录框。
  */
 export async function tryRefreshToken(): Promise<boolean> {
-    if (!authState.refreshToken) return false
+    const refreshToken = authState.refreshToken
+    if (!refreshToken) return false
     try {
         const resp = await fetch(`${API_BASE}/api/auth/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken: authState.refreshToken }),
+            body: JSON.stringify({ refreshToken }),
         })
+        if (authState.refreshToken !== refreshToken) return false
         if (!resp.ok) {
             clearTokens()
             authState.showLogin = true
             return false
         }
         const tokens = (await resp.json()) as AuthTokens
+        if (authState.refreshToken !== refreshToken) return false
         // 静默刷新不 emit auth:login（不打扰页面列表刷新逻辑）
         authState.accessToken = tokens.accessToken
         authState.refreshToken = tokens.refreshToken

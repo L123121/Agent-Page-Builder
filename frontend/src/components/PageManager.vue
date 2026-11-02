@@ -117,13 +117,11 @@ async function handleCreate(): Promise<void> {
         inputValue: '未命名页面',
     }).catch(() => ({ value: null }))
     if (title === null) return
-    await createPage(title)
-    visible.value = false
+    if (await createPage(title)) visible.value = false
 }
 
 async function handleOpen(id: string): Promise<void> {
-    await openPage(id)
-    visible.value = false
+    if (await openPage(id)) visible.value = false
 }
 
 async function handleDelete(id: string): Promise<void> {

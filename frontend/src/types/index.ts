@@ -171,8 +171,11 @@ export interface StoreState {
   currentPageId: string | null
   /** 当前页面标题（用于显示和保存） */
   currentPageTitle: string
+  currentDraftId: string
+  pageSessionId: number
   /** 是否正在保存到后端 */
   isSaving: boolean
+  saveError: string | null
   /** 最后与后端同步的版本号（用于判断是否需要同步） */
   lastSyncedVersion: number
 }

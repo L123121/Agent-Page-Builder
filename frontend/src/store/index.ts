@@ -59,7 +59,10 @@ export const useStore = defineStore('main', {
         // 后端持久化状态
         currentPageId: null,
         currentPageTitle: '未命名页面',
+        currentDraftId: generateID(),
+        pageSessionId: 0,
         isSaving: false,
+        saveError: null,
         lastSyncedVersion: 0,
     }),
 
@@ -94,16 +97,27 @@ export const useStore = defineStore('main', {
 
         // ==================== 后端持久化 ====================
 
-        /** 设置当前页面 ID（打开已有页面或保存新页面后调用） */
-        setCurrentPage(id: string, title?: string): void {
+        setCurrentPage(
+            id: string | null,
+            title = '未命名页面',
+            options: { draftId?: string; syncedVersion?: number } = {},
+        ): void {
             this.currentPageId = id
-            if (title !== undefined) this.currentPageTitle = title
-            this.lastSyncedVersion = this.dataVersion
+            this.currentPageTitle = title
+            this.currentDraftId = options.draftId ?? generateID()
+            this.lastSyncedVersion = options.syncedVersion ?? (id ? this.dataVersion : -1)
+            this.isSaving = false
+            this.saveError = null
+            this.curComponent = null
+            this.curComponentIndex = null
+            this.copyData = null
+            this.areaData.components = []
+            this.versions = []
+            this.pageSessionId++
         },
 
-        /** 标记已与后端同步 */
-        markSynced(): void {
-            this.lastSyncedVersion = this.dataVersion
+        markSynced(version: number): void {
+            this.lastSyncedVersion = Math.max(this.lastSyncedVersion, Math.min(version, this.dataVersion))
         },
 
         /** 当前数据是否与后端有未同步的变更 */

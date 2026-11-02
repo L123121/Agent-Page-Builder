@@ -4,7 +4,12 @@
 
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 import type { ComponentData, CanvasStyleData } from '@/types'
-import { getAccessToken, requireLogin, tryRefreshToken } from '@/utils/auth'
+import { getAccessToken, getAuthOwner, requireLogin, tryRefreshToken } from '@/utils/auth'
+
+interface AuthRequestConfig extends AxiosRequestConfig {
+    authOwner?: string
+    _retried?: boolean
+}
 
 export interface PageInfo {
     _id: string
@@ -81,17 +86,23 @@ function refreshSingleFlight(): Promise<boolean> {
  */
 export function withAuthInterceptors(instance: AxiosInstance): void {
     instance.interceptors.request.use((config) => {
+        const sessionConfig = config as AuthRequestConfig
+        sessionConfig.authOwner ??= getAuthOwner()
+        if (sessionConfig.authOwner !== getAuthOwner()) throw new Error('登录账号已变化，请重新操作')
         const token = getAccessToken()
         if (token) config.headers.Authorization = `Bearer ${token}`
         return config
     })
     instance.interceptors.response.use(undefined, async (error) => {
-        const config = error.config as (AxiosRequestConfig & { _retried?: boolean }) | undefined
+        const config = error.config as AuthRequestConfig | undefined
+        if (config?.authOwner && config.authOwner !== getAuthOwner()) {
+            return Promise.reject(new Error('登录账号已变化，请重新操作'))
+        }
         const status = error.response?.status
         const url = String(error.config?.url || '')
         if (status === 401 && config && !config._retried && !url.includes('/api/auth/')) {
             config._retried = true
-            if (await refreshSingleFlight()) {
+            if (await refreshSingleFlight() && config.authOwner === getAuthOwner()) {
                 config.headers = config.headers ?? {}
                 config.headers.Authorization = `Bearer ${getAccessToken()}`
                 return instance.request(config)
@@ -112,14 +123,14 @@ export const pagesApi = {
     list() {
         return api.get('/api/pages') as Promise<{ pages: PageSummary[] }>
     },
-    get(id: string) {
-        return api.get(`/api/pages/${id}`) as Promise<{ page: PageInfo }>
+    get(id: string, config?: AuthRequestConfig) {
+        return api.get(`/api/pages/${id}`, config) as Promise<{ page: PageInfo }>
     },
-    create(data: PagePayload) {
-        return api.post('/api/pages', data) as Promise<{ page: PageInfo }>
+    create(data: PagePayload, config?: AuthRequestConfig) {
+        return api.post('/api/pages', data, config) as Promise<{ page: PageInfo }>
     },
-    update(id: string, data: PagePayload) {
-        return api.put(`/api/pages/${id}`, data) as Promise<{ page: PageInfo }>
+    update(id: string, data: PagePayload, config?: AuthRequestConfig) {
+        return api.put(`/api/pages/${id}`, data, config) as Promise<{ page: PageInfo }>
     },
     delete(id: string) {
         return api.delete(`/api/pages/${id}`) as Promise<{ message: string }>

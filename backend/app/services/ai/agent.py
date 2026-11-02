@@ -25,7 +25,7 @@ from .agent_nodes import await_user_node, executor_node, planner_node  # noqa: F
 from .agent_streaming import run_agent_streaming  # noqa: F401 (再导出)
 from .fallback import run_fallback_agent
 from .graph import agent_graph, ensure_checkpointer_ready, extract_graph_result, has_pending_interrupt
-from .run_context import build_graph_config, build_initial_state
+from .run_context import build_graph_config, build_initial_state, resolve_thread
 from .run_logger import log_agent_run
 from .stage_routing import next_stage_for_tool, resolve_stage  # noqa: F401 (再导出)
 from .tool_handlers import _gen_id, process_tool_response  # noqa: F401 (再导出)
@@ -50,6 +50,7 @@ async def run_agent(
     conversation_stage: str | None = None,
     thread_id: str | None = None,
     resume: Any | None = None,
+    owner_id: str | None = None,
 ) -> Dict[str, Any]:
     """运行 AI Agent：先路由阶段，再在阶段内执行一个工具。
 
@@ -77,10 +78,11 @@ async def run_agent(
 
     if not settings.AI_API_KEY:
         fallback_result = run_fallback_agent(initial_state, "AI_API_KEY is not configured")
-        log_agent_run("chat", thread_id, stage, fallback_result, 0, prompt=prompt)
+        log_agent_run("chat", resolve_thread(thread_id, owner_id)[0], stage, fallback_result, 0, prompt=prompt)
         return fallback_result
 
-    config = build_graph_config(thread_id)
+    public_thread_id, internal_thread_id = resolve_thread(thread_id, owner_id)
+    config = build_graph_config(internal_thread_id)
     started = time.monotonic()
     try:
         # redis 后端首次使用前建索引（memory 后端 no-op）；失败走统一错误路径
@@ -91,10 +93,10 @@ async def run_agent(
             result = await agent_graph.ainvoke(Command(resume=resume), config=config)
         else:
             result = await agent_graph.ainvoke(initial_state, config=config)
-        extracted = extract_graph_result(result, stage, config["configurable"]["thread_id"])
+        extracted = extract_graph_result(result, stage, public_thread_id)
         log_agent_run(
             "chat",
-            config["configurable"]["thread_id"],
+            public_thread_id,
             stage,
             extracted,
             int((time.monotonic() - started) * 1000),
@@ -106,7 +108,7 @@ async def run_agent(
         failure = {"reply": f"AI 处理失败: {str(e)}", "actions": [], "nextStage": stage}
         log_agent_run(
             "chat",
-            config["configurable"]["thread_id"],
+            public_thread_id,
             stage,
             failure,
             int((time.monotonic() - started) * 1000),

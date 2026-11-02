@@ -23,6 +23,11 @@ router = APIRouter()
 SSE_KEEPALIVE_INTERVAL = getattr(settings, "AI_SSE_KEEPALIVE_INTERVAL", 15.0)
 
 
+def _owner_id(user: User | None) -> str | None:
+    """AI 会话的归属键；路由已强制登录，None 仅出现在测试替身中。"""
+    return user.id if user is not None else None
+
+
 def _sse_data(event: Any) -> str:
     return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
@@ -106,6 +111,7 @@ async def chat(data: AIChatRequest, user: User = Depends(get_current_user)):
             conversation_stage=data.conversationStage,
             thread_id=data.threadId,
             resume=data.resume,
+            owner_id=_owner_id(user),
         )
         return AIChatResponse(**result)
     except Exception as e:
@@ -144,6 +150,7 @@ async def chat_stream(data: AIChatRequest, user: User = Depends(get_current_user
                 conversation_stage=data.conversationStage,
                 thread_id=data.threadId,
                 resume=data.resume,
+                owner_id=_owner_id(user),
             ):
                 yield event
 

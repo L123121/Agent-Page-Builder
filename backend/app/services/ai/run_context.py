@@ -70,6 +70,19 @@ def build_initial_state(
     return initial_state, stage
 
 
+def resolve_thread(thread_id: str | None, owner_id: str | None) -> tuple[str, str]:
+    """返回 (对外 threadId, 内部 checkpoint 键)。
+
+    内部键按归属用户做命名空间隔离：同一个 threadId 在不同用户下对应不同 checkpoint。
+    他人或伪造的 threadId 只会落到请求者自己的空命名空间，表现为新会话，
+    既不能恢复他人的挂起状态，也不会泄露该线程是否存在。
+    对外仍返回客户端可见的 threadId，协议保持不变。
+    """
+    public_id = thread_id or f"thread-{generate_id(16)}"
+    scope = f"user:{owner_id}" if owner_id else "anonymous"
+    return public_id, f"{scope}|thread:{public_id}"
+
+
 def build_graph_config(thread_id: str | None) -> dict:
     """图执行配置：会话线程 + 交互轮数对应的递归上限。
 

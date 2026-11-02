@@ -21,8 +21,24 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.dependencies import get_current_user
+from app.config import settings
 from app.services.ai.agent_streaming import run_agent_streaming
 from app.services.ai.graph import TTLMemorySaver, agent_graph
+
+_api_key_patch = None
+
+
+def setUpModule():
+    """流式入口在未配置 AI_API_KEY 时直接返回 agent_error；测试统一注入占位 key，
+    LLM 调用本身已被 _invoke_llm 打桩，结果与本机环境变量无关。"""
+    global _api_key_patch
+    _api_key_patch = patch.object(settings, "AI_API_KEY", "test-key")
+    _api_key_patch.start()
+
+
+def tearDownModule():
+    if _api_key_patch is not None:
+        _api_key_patch.stop()
 
 
 def make_options_response():

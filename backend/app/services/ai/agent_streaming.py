@@ -28,7 +28,7 @@ from langgraph.types import Command
 from app.config import settings
 
 from .graph import agent_graph, ensure_checkpointer_ready, extract_graph_result, has_pending_interrupt
-from .run_context import build_graph_config, build_initial_state
+from .run_context import build_graph_config, build_initial_state, resolve_thread
 from .run_logger import log_agent_run
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,7 @@ async def run_agent_streaming(
     conversation_stage: str | None = None,
     thread_id: str | None = None,
     resume: Any | None = None,
+    owner_id: str | None = None,
 ):
     """流式版 Agent：async generator，每步工具调用都 yield 进度事件。
 
@@ -82,13 +83,14 @@ async def run_agent_streaming(
         yield {"type": "agent_error", "error": "AI_API_KEY is not configured"}
         return
 
-    config = build_graph_config(thread_id)
+    public_thread_id, internal_thread_id = resolve_thread(thread_id, owner_id)
+    config = build_graph_config(internal_thread_id)
     started = time.monotonic()
 
     def _log_run(result_payload: dict, error: str | None = None) -> None:
         log_agent_run(
             "chat_stream",
-            config["configurable"]["thread_id"],
+            public_thread_id,
             stage,
             result_payload,
             int((time.monotonic() - started) * 1000),
@@ -122,7 +124,7 @@ async def run_agent_streaming(
                 if node_name == "__interrupt__":
                     # planner 挂起等待用户输入：与 run_agent 非流式协议保持一致
                     waiting_result = extract_graph_result(
-                        {"__interrupt__": node_output}, stage, config["configurable"]["thread_id"]
+                        {"__interrupt__": node_output}, stage, public_thread_id
                     )
                     _log_run(waiting_result)
                     yield {"type": "agent_done", "result": waiting_result}
@@ -145,7 +147,7 @@ async def run_agent_streaming(
                             "nextStage": result.get("nextStage", "edit"),
                             "validation": result.get("validation"),
                             "trace": trace,
-                            "threadId": config["configurable"]["thread_id"],
+                            "threadId": public_thread_id,
                             "waitingForInput": False,
                         },
                     }
@@ -164,7 +166,7 @@ async def run_agent_streaming(
                             "reply": result.get("reply", ""),
                             "actions": result.get("actions", []),
                             "nextStage": result.get("nextStage", "edit"),
-                            "threadId": config["configurable"]["thread_id"],
+                            "threadId": public_thread_id,
                             "waitingForInput": False,
                         },
                     }

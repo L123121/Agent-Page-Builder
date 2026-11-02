@@ -49,7 +49,8 @@ class AIChatRequest(BaseModel):
     conversationStage: Literal["discover", "design", "plan", "confirm", "execute", "edit"] | None = None
     # 会话标识与中断恢复：同一 threadId 下的执行状态由 checkpoint 持久化；
     # 前端收到 waitingForInput=true 后，凭 threadId + resume 继续上次中断的图执行
-    threadId: str | None = None
+    # 服务端签发的 ID 只含 URL 安全字符；限制格式可拒绝路径穿越等异常输入
+    threadId: str | None = Field(default=None, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     resume: Any | None = None
     # 参考图：data URL (image/...)，全模态模型直接"看到"图片 + 文字，无需前置解析
     image: str | None = Field(default=None, max_length=8_000_000)
